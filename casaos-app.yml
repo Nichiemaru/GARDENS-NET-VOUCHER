@@ -1,5 +1,5 @@
-# CasaOS App Configuration for GARDENS-NET E-commerce
-name: gardens-net-ecommerce
+# CasaOS App Configuration for MikPos (GARDENS-NET Integration)
+name: mikpos-gardens-net
 services:
   app:
     image: gardens-net:latest
@@ -12,31 +12,41 @@ services:
     network_mode: bridge
     ports:
       - target: 3000
-        published: "3000"
+        published: "8080"
         protocol: tcp
     environment:
       NODE_ENV: production
+      MIKPOS_MODE: true
       DATABASE_URL: postgresql://gardens_user:gardens_secure_password_2024@postgres:5432/gardens_net
+      MIKPOS_BASE_URL: http://localhost:8080
+      MIKPOS_WEBHOOK_URL: http://localhost:8080/api/mikpos/products/webhook
+      MIKPOS_WEBHOOK_SECRET: mikpos-webhook-secret-2024
     restart: unless-stopped
     volumes:
       - type: bind
-        source: /DATA/AppData/gardens-net/uploads
+        source: /DATA/AppData/mikpos/uploads
         target: /app/public/uploads
       - type: bind
-        source: /DATA/AppData/gardens-net/logs
+        source: /DATA/AppData/mikpos/logs
         target: /app/logs
+      - type: bind
+        source: /DATA/AppData/mikpos/config
+        target: /app/config
     x-casaos:
       envs:
-        - container: NODE_ENV
+        - container: MIKPOS_MODE
           description:
-            en_us: Node.js Environment
+            en_us: Enable MikPos Mode (Admin Interface)
         - container: DATABASE_URL
           description:
             en_us: Database Connection URL
+        - container: MIKPOS_BASE_URL
+          description:
+            en_us: MikPos Base URL
       ports:
         - container: "3000"
           description:
-            en_us: Web UI Port
+            en_us: MikPos Admin Interface
       volumes:
         - container: /app/public/uploads
           description:
@@ -44,24 +54,27 @@ services:
         - container: /app/logs
           description:
             en_us: Application Logs
-    container_name: gardens-net-app
+        - container: /app/config
+          description:
+            en_us: Configuration Files
+    container_name: mikpos-admin
 x-casaos:
   architectures:
     - amd64
     - arm64
   main: app
   description:
-    en_us: GARDENS-NET E-commerce - Internet voucher management system with MikPos integration
+    en_us: MikPos - Hotspot Management System with GARDENS-NET E-commerce Integration
   tagline:
-    en_us: Complete e-commerce solution for internet service providers
+    en_us: Complete hotspot management solution for internet service providers
   developer: GARDENS-NET
-  author: GARDENS-NET Team
-  icon: https://cdn.jsdelivr.net/gh/IceWhaleTech/CasaOS-AppStore@main/Apps/gardens-net/icon.png
+  author: MikPos Team
+  icon: https://cdn.jsdelivr.net/gh/IceWhaleTech/CasaOS-AppStore@main/Apps/mikpos/icon.png
   screenshot_link:
-    - https://cdn.jsdelivr.net/gh/IceWhaleTech/CasaOS-AppStore@main/Apps/gardens-net/screenshot-1.png
-    - https://cdn.jsdelivr.net/gh/IceWhaleTech/CasaOS-AppStore@main/Apps/gardens-net/screenshot-2.png
-  thumbnail: https://cdn.jsdelivr.net/gh/IceWhaleTech/CasaOS-AppStore@main/Apps/gardens-net/thumbnail.png
+    - https://cdn.jsdelivr.net/gh/IceWhaleTech/CasaOS-AppStore@main/Apps/mikpos/screenshot-1.png
+    - https://cdn.jsdelivr.net/gh/IceWhaleTech/CasaOS-AppStore@main/Apps/mikpos/screenshot-2.png
+  thumbnail: https://cdn.jsdelivr.net/gh/IceWhaleTech/CasaOS-AppStore@main/Apps/mikpos/thumbnail.png
   title:
-    en_us: GARDENS-NET E-commerce
+    en_us: MikPos - Hotspot Manager
   category: Network
-  port_map: "3000"
+  port_map: "8080"

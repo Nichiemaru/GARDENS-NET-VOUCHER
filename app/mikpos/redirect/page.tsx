@@ -92,6 +92,7 @@ export default function MikPosRedirectPage() {
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [sessionExpired, setSessionExpired] = useState(false)
+  const [status, setStatus] = useState("processing")
 
   const sessionId = searchParams.get("session")
 
@@ -107,47 +108,45 @@ export default function MikPosRedirectPage() {
       return
     }
 
-    fetchCustomerSession()
+    const fetchSession = async () => {
+      try {
+        const response = await fetch(`/api/mikpos/session/${sessionId}`)
+        const sessionData = await response.json()
+
+        if (sessionData.success) {
+          setStatus("success")
+
+          // Redirect ke customer landing dengan data session
+          const params = new URLSearchParams({
+            mac: sessionData.data.mac_address || "",
+            ip: sessionData.data.ip_address || "",
+            session: sessionId,
+          })
+
+          setTimeout(() => {
+            router.replace(`/customer?${params.toString()}`)
+          }, 2000)
+        } else {
+          setStatus("error")
+          setTimeout(() => {
+            router.replace("/customer")
+          }, 3000)
+        }
+      } catch (error) {
+        console.error("Failed to fetch session:", error)
+        setStatus("error")
+        setTimeout(() => {
+          router.replace("/customer")
+        }, 3000)
+      }
+    }
+
+    fetchSession()
 
     // Check session expiry every 30 seconds
     const interval = setInterval(checkSessionExpiry, 30000)
     return () => clearInterval(interval)
-  }, [sessionId])
-
-  const fetchCustomerSession = async () => {
-    try {
-      const response = await fetch(`/api/mikpos/session/${sessionId}`)
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          setSessionExpired(true)
-          return
-        }
-        throw new Error("Gagal memuat session")
-      }
-
-      const data = await response.json()
-      setCustomerSession(data.session)
-
-      // Pre-select package if specified from MikPos
-      if (data.session.requested_profile) {
-        setSelectedPackage(data.session.requested_profile)
-      } else {
-        // Default to popular package
-        setSelectedPackage("1day")
-      }
-    } catch (error) {
-      console.error("Error fetching session:", error)
-      toast({
-        title: "Error",
-        description: "Gagal memuat data session",
-        variant: "destructive",
-      })
-      setSessionExpired(true)
-    } finally {
-      setLoading(false)
-    }
-  }
+  }, [sessionId, router])
 
   const checkSessionExpiry = async () => {
     if (!sessionId) return
@@ -252,6 +251,71 @@ export default function MikPosRedirectPage() {
       currency: "IDR",
       minimumFractionDigits: 0,
     }).format(price)
+  }
+
+  if (status === "processing") {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-8 text-center space-y-6">
+            <div className="flex justify-center">
+              <div className="bg-green-600 p-4 rounded-full">
+                <Wifi className="h-8 w-8 text-white" />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600 mx-auto"></div>
+              <p className="text-gray-600">Memproses koneksi Anda...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (status === "success") {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-8 text-center space-y-6">
+            <div className="flex justify-center">
+              <div className="bg-green-600 p-4 rounded-full">
+                <Wifi className="h-8 w-8 text-white" />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <CheckCircle className="h-8 w-8 text-green-600 mx-auto" />
+              <p className="text-gray-600">Koneksi berhasil! Mengarahkan ke halaman pembelian...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (status === "error") {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-8 text-center space-y-6">
+            <div className="flex justify-center">
+              <div className="bg-green-600 p-4 rounded-full">
+                <Wifi className="h-8 w-8 text-white" />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="h-8 w-8 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+                <span className="text-red-600 text-xl">!</span>
+              </div>
+              <p className="text-gray-600">Terjadi kesalahan. Mengarahkan ulang...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   if (loading) {

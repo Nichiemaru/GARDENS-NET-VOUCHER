@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -214,145 +213,12 @@ export default function AdminDashboard() {
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-bold text-gray-900">Manajemen Produk</h2>
               {!isViewer && (
-                <Button onClick={() => setNewProduct({ category: "wifi" })}>
+                <Button onClick={() => router.push("/admin/dashboard/add-product")}>
                   <Plus className="h-4 w-4 mr-2" />
                   Tambah Produk
                 </Button>
               )}
             </div>
-
-            {/* Add/Edit Product Form */}
-            {(newProduct.name !== undefined || editingProduct) && !isViewer && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>{editingProduct ? "Edit Produk" : "Tambah Produk Baru"}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Nama Produk</Label>
-                      <Input
-                        id="name"
-                        value={editingProduct?.name || newProduct.name || ""}
-                        onChange={(e) => {
-                          if (editingProduct) {
-                            setEditingProduct({ ...editingProduct, name: e.target.value })
-                          } else {
-                            setNewProduct({ ...newProduct, name: e.target.value })
-                          }
-                        }}
-                        placeholder="Masukkan nama produk"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="price">Harga</Label>
-                      <Input
-                        id="price"
-                        type="number"
-                        value={editingProduct?.price || newProduct.price || ""}
-                        onChange={(e) => {
-                          const price = Number.parseInt(e.target.value)
-                          if (editingProduct) {
-                            setEditingProduct({ ...editingProduct, price })
-                          } else {
-                            setNewProduct({ ...newProduct, price })
-                          }
-                        }}
-                        placeholder="0"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="category">Kategori</Label>
-                      <select
-                        id="category"
-                        className="w-full p-2 border border-gray-300 rounded-md"
-                        value={editingProduct?.category || newProduct.category || "wifi"}
-                        onChange={(e) => {
-                          const category = e.target.value as "wifi" | "pulsa"
-                          if (editingProduct) {
-                            setEditingProduct({ ...editingProduct, category })
-                          } else {
-                            setNewProduct({ ...newProduct, category })
-                          }
-                        }}
-                      >
-                        <option value="wifi">WiFi Voucher</option>
-                        <option value="pulsa">Pulsa/Kuota</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="stock">Stok</Label>
-                      <Input
-                        id="stock"
-                        type="number"
-                        value={editingProduct?.stock || newProduct.stock || ""}
-                        onChange={(e) => {
-                          const stock = Number.parseInt(e.target.value)
-                          if (editingProduct) {
-                            setEditingProduct({ ...editingProduct, stock })
-                          } else {
-                            setNewProduct({ ...newProduct, stock })
-                          }
-                        }}
-                        placeholder="0"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="provider">Provider (Opsional)</Label>
-                    <Input
-                      id="provider"
-                      value={editingProduct?.provider || newProduct.provider || ""}
-                      onChange={(e) => {
-                        if (editingProduct) {
-                          setEditingProduct({ ...editingProduct, provider: e.target.value })
-                        } else {
-                          setNewProduct({ ...newProduct, provider: e.target.value })
-                        }
-                      }}
-                      placeholder="Telkomsel, XL, Tri, dll"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="description">Deskripsi</Label>
-                    <Textarea
-                      id="description"
-                      value={editingProduct?.description || newProduct.description || ""}
-                      onChange={(e) => {
-                        if (editingProduct) {
-                          setEditingProduct({ ...editingProduct, description: e.target.value })
-                        } else {
-                          setNewProduct({ ...newProduct, description: e.target.value })
-                        }
-                      }}
-                      placeholder="Deskripsi produk"
-                      rows={3}
-                    />
-                  </div>
-
-                  <div className="flex space-x-2">
-                    <Button onClick={handleSaveProduct}>
-                      <Save className="h-4 w-4 mr-2" />
-                      Simpan
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setEditingProduct(null)
-                        setNewProduct({})
-                      }}
-                    >
-                      Batal
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
 
             {/* Products Table */}
             <Card>

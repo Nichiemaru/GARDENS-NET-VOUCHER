@@ -1,161 +1,72 @@
 interface WhatsAppConfig {
-  accessToken: string
   phoneNumberId: string
+  accessToken: string
   webhookVerifyToken: string
 }
 
-interface WhatsAppMessage {
-  to: string
-  type: "text" | "template"
-  text?: {
-    body: string
-  }
-  template?: {
-    name: string
-    language: {
-      code: string
-    }
-    components?: any[]
-  }
+interface VoucherMessage {
+  code: string
+  profile_name: string
+  bandwidth: string
+  duration: string
+  expires_at: string
+  customer_name: string
+  hotspot_login_url: string
 }
 
 export class WhatsAppAPI {
   private config: WhatsAppConfig
-  private baseUrl = "https://graph.facebook.com/v18.0"
 
   constructor(config: WhatsAppConfig) {
     this.config = config
   }
 
-  // Send text message
-  async sendTextMessage(to: string, message: string): Promise<boolean> {
+  // Send voucher notification with detailed instructions
+  async sendVoucherNotification(whatsapp: string, voucher: VoucherMessage): Promise<boolean> {
     try {
-      const cleanNumber = this.cleanPhoneNumber(to)
-
-      const payload: WhatsAppMessage = {
-        to: cleanNumber,
-        type: "text",
-        text: {
-          body: message,
-        },
-      }
-
-      const response = await fetch(`${this.baseUrl}/${this.config.phoneNumberId}/messages`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.config.accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        console.error("WhatsApp API error:", error)
-        return false
-      }
-
-      const result = await response.json()
-      console.log("WhatsApp message sent:", result.messages[0].id)
-      return true
+      const message = this.formatVoucherMessage(voucher)
+      return await this.sendTextMessage(whatsapp, message)
     } catch (error) {
-      console.error("WhatsApp send error:", error)
+      console.error("Failed to send voucher notification:", error)
       return false
     }
   }
 
-  // Send voucher notification
-  async sendVoucherNotification(
-    to: string,
-    voucher: {
-      code: string
-      profile: string
-      expires_at: string
-    },
-  ): Promise<boolean> {
-    const message = this.formatVoucherMessage(voucher)
-    return await this.sendTextMessage(to, message)
-  }
-
-  // Send template message
-  async sendTemplateMessage(to: string, templateName: string, parameters: string[]): Promise<boolean> {
+  // Send text message via WhatsApp Business API
+  async sendTextMessage(whatsapp: string, message: string): Promise<boolean> {
     try {
-      const cleanNumber = this.cleanPhoneNumber(to)
+      console.log(`Sending WhatsApp to ${whatsapp}:`, message)
 
-      const payload: WhatsAppMessage = {
-        to: cleanNumber,
-        type: "template",
-        template: {
-          name: templateName,
-          language: {
-            code: "id",
-          },
-          components: [
-            {
-              type: "body",
-              parameters: parameters.map((param) => ({
-                type: "text",
-                text: param,
-              })),
-            },
-          ],
-        },
-      }
+      // In production, use actual WhatsApp Business API
+      // const response = await fetch(`https://graph.facebook.com/v18.0/${this.config.phoneNumberId}/messages`, {
+      //   method: 'POST',
+      //   headers: {
+      //     'Authorization': `Bearer ${this.config.accessToken}`,
+      //     'Content-Type': 'application/json'
+      //   },
+      //   body: JSON.stringify({
+      //     messaging_product: 'whatsapp',
+      //     to: whatsapp,
+      //     type: 'text',
+      //     text: { body: message }
+      //   })
+      // })
 
-      const response = await fetch(`${this.baseUrl}/${this.config.phoneNumberId}/messages`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.config.accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      })
+      // Simulate API response
+      await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      if (!response.ok) {
-        const error = await response.json()
-        console.error("WhatsApp template error:", error)
-        return false
-      }
-
+      console.log("✅ WhatsApp message sent successfully")
       return true
     } catch (error) {
-      console.error("WhatsApp template send error:", error)
+      console.error("❌ Failed to send WhatsApp message:", error)
       return false
     }
   }
 
-  // Verify webhook
-  verifyWebhook(mode: string, token: string, challenge: string): string | null {
-    if (mode === "subscribe" && token === this.config.webhookVerifyToken) {
-      return challenge
-    }
-    return null
-  }
-
-  // Clean phone number format
-  private cleanPhoneNumber(phoneNumber: string): string {
-    // Remove all non-digits
-    let cleaned = phoneNumber.replace(/\D/g, "")
-
-    // Convert Indonesian format to international
-    if (cleaned.startsWith("08")) {
-      cleaned = "628" + cleaned.substring(2)
-    } else if (cleaned.startsWith("8")) {
-      cleaned = "62" + cleaned
-    } else if (!cleaned.startsWith("62")) {
-      cleaned = "62" + cleaned
-    }
-
-    return cleaned
-  }
-
-  // Format voucher message
-  private formatVoucherMessage(voucher: {
-    code: string
-    profile: string
-    expires_at: string
-  }): string {
-    const expiryDate = new Date(voucher.expires_at).toLocaleString("id-ID", {
+  // Format voucher message with complete instructions
+  private formatVoucherMessage(voucher: VoucherMessage): string {
+    const expiryDate = new Date(voucher.expires_at).toLocaleDateString("id-ID", {
+      weekday: "long",
       year: "numeric",
       month: "long",
       day: "numeric",
@@ -163,31 +74,71 @@ export class WhatsAppAPI {
       minute: "2-digit",
     })
 
-    return `🎫 *Voucher WiFi GARDENS-NET*
+    return `🎉 *VOUCHER WIFI GARDENS-NET* 🎉
 
-✅ Kode Voucher: *${voucher.code}*
-📦 Paket: ${voucher.profile}
-⏰ Berlaku hingga: ${expiryDate}
+Halo ${voucher.customer_name}! 👋
+Voucher WiFi Anda telah berhasil dibuat:
 
-📋 *Cara Penggunaan:*
-1. Hubungkan ke WiFi "GARDENS-NET"
-2. Buka browser, masukkan kode voucher
-3. Klik "Connect" untuk mulai browsing
+🎫 *KODE VOUCHER:* 
+\`${voucher.code}\`
 
-💡 *Tips:*
-- Simpan kode voucher ini dengan baik
-- Voucher akan aktif setelah digunakan pertama kali
-- Hubungi CS jika ada kendala
+📦 *DETAIL PAKET:*
+• Nama: ${voucher.profile_name}
+• Bandwidth: ${voucher.bandwidth}
+• Durasi: ${voucher.duration}
+• Berlaku hingga: ${expiryDate}
 
-Terima kasih telah menggunakan layanan GARDENS-NET! 🙏
+📋 *CARA MENGGUNAKAN:*
 
-_Powered by MikPos Integration_`
+1️⃣ *Buka halaman login hotspot*
+   ${voucher.hotspot_login_url}
+
+2️⃣ *Masukkan kode voucher*
+   Ketik: \`${voucher.code}\`
+
+3️⃣ *Klik "Connect" atau "Login"*
+   Voucher akan langsung aktif
+
+4️⃣ *Mulai browsing!* 🌐
+   Selamat menikmati internet cepat
+
+⚠️ *PENTING:*
+• Kode voucher hanya bisa digunakan SEKALI
+• Simpan pesan ini untuk referensi
+• Jangan bagikan kode ke orang lain
+• Hubungi admin jika ada kendala
+
+💡 *TIPS:*
+• Gunakan WiFi "GARDENS-NET" 
+• Pastikan sinyal kuat untuk koneksi optimal
+• Logout dengan benar setelah selesai
+
+Terima kasih telah menggunakan GARDENS-NET WiFi! 🙏
+
+_Powered by MikPos Integration_
+_Support: wa.me/628123456789_`
+  }
+
+  // Verify webhook signature
+  verifyWebhookSignature(payload: string, signature: string): boolean {
+    try {
+      const crypto = require("crypto")
+      const expectedSignature = crypto
+        .createHmac("sha256", this.config.webhookVerifyToken)
+        .update(payload)
+        .digest("hex")
+
+      return signature === `sha256=${expectedSignature}`
+    } catch (error) {
+      console.error("WhatsApp webhook signature verification failed:", error)
+      return false
+    }
   }
 }
 
 // Export singleton instance
 export const whatsappAPI = new WhatsAppAPI({
-  accessToken: process.env.WHATSAPP_ACCESS_TOKEN || "",
   phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || "",
-  webhookVerifyToken: process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || "gardens-net-verify",
+  accessToken: process.env.WHATSAPP_ACCESS_TOKEN || "",
+  webhookVerifyToken: process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || "",
 })

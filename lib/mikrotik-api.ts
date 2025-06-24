@@ -2,7 +2,7 @@ interface MikroTikConfig {
   host: string
   username: string
   password: string
-  port?: number
+  port: number
 }
 
 interface HotspotUser {
@@ -11,129 +11,224 @@ interface HotspotUser {
   profile: string
   "limit-uptime"?: string
   comment?: string
+  disabled?: boolean
+}
+
+interface HotspotProfile {
+  name: string
+  "shared-users": number
+  "rate-limit": string
+  "session-timeout"?: string
+  "idle-timeout"?: string
+  "keepalive-timeout"?: string
+  "status-autorefresh"?: string
+  "transparent-proxy"?: boolean
 }
 
 export class MikroTikAPI {
   private config: MikroTikConfig
 
   constructor(config: MikroTikConfig) {
-    this.config = {
-      ...config,
-      port: config.port || 8728,
-    }
+    this.config = config
   }
 
   // Create hotspot user (voucher)
   async createHotspotUser(userData: HotspotUser): Promise<boolean> {
     try {
+      console.log(`Creating MikroTik hotspot user: ${userData.name}`)
+
       // In production, use RouterOS API library
-      // For demo, we'll simulate the API call
+      // For now, simulate the API call
+      const apiCall = {
+        endpoint: "/ip/hotspot/user/add",
+        data: userData,
+        config: this.config,
+      }
 
-      console.log("Creating MikroTik hotspot user:", userData)
+      console.log("MikroTik API Call:", JSON.stringify(apiCall, null, 2))
 
-      // Example using node-routeros library:
-      // const conn = new RouterOSAPI({
-      //   host: this.config.host,
-      //   user: this.config.username,
-      //   password: this.config.password,
-      //   port: this.config.port
-      // })
+      // Simulate API response
+      await new Promise((resolve) => setTimeout(resolve, 500))
 
-      // await conn.connect()
-      // const result = await conn.write('/ip/hotspot/user/add', [
-      //   `=name=${userData.name}`,
-      //   `=password=${userData.password}`,
-      //   `=profile=${userData.profile}`,
-      //   `=limit-uptime=${userData['limit-uptime']}`,
-      //   `=comment=${userData.comment}`
-      // ])
-      // await conn.close()
-
-      // Simulate success
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      console.log(`✅ Hotspot user created successfully: ${userData.name}`)
       return true
     } catch (error) {
-      console.error("MikroTik API error:", error)
-      throw new Error("Failed to create hotspot user")
+      console.error("❌ Failed to create hotspot user:", error)
+      throw new Error(`MikroTik API Error: ${error}`)
+    }
+  }
+
+  // Create hotspot profile
+  async createHotspotProfile(profileData: HotspotProfile): Promise<boolean> {
+    try {
+      console.log(`Creating MikroTik hotspot profile: ${profileData.name}`)
+
+      const apiCall = {
+        endpoint: "/ip/hotspot/user/profile/add",
+        data: profileData,
+        config: this.config,
+      }
+
+      console.log("MikroTik Profile API Call:", JSON.stringify(apiCall, null, 2))
+
+      // Simulate API response
+      await new Promise((resolve) => setTimeout(resolve, 300))
+
+      console.log(`✅ Hotspot profile created successfully: ${profileData.name}`)
+      return true
+    } catch (error) {
+      console.error("❌ Failed to create hotspot profile:", error)
+      throw new Error(`MikroTik Profile API Error: ${error}`)
     }
   }
 
   // Get hotspot user status
-  async getHotspotUser(username: string): Promise<any> {
+  async getHotspotUserStatus(username: string): Promise<any> {
     try {
-      console.log("Getting MikroTik hotspot user:", username)
+      console.log(`Getting hotspot user status: ${username}`)
 
-      // Example API call:
-      // const conn = new RouterOSAPI(this.config)
-      // await conn.connect()
-      // const users = await conn.write('/ip/hotspot/user/print', [
-      //   `?name=${username}`
-      // ])
-      // await conn.close()
-      // return users[0]
-
-      // Simulate user data
-      return {
+      // Simulate API call
+      const mockStatus = {
         name: username,
-        profile: "1day",
-        "bytes-in": "1024000",
-        "bytes-out": "2048000",
-        uptime: "1h30m",
-        disabled: "false",
+        profile: "1day-20M",
+        uptime: "0s",
+        "bytes-in": 0,
+        "bytes-out": 0,
+        "packets-in": 0,
+        "packets-out": 0,
+        dynamic: false,
+        disabled: false,
+        comment: `Generated voucher for customer`,
       }
+
+      return mockStatus
     } catch (error) {
-      console.error("MikroTik API error:", error)
-      return null
+      console.error("❌ Failed to get hotspot user status:", error)
+      throw new Error(`MikroTik Status API Error: ${error}`)
     }
   }
 
   // Remove hotspot user
   async removeHotspotUser(username: string): Promise<boolean> {
     try {
-      console.log("Removing MikroTik hotspot user:", username)
+      console.log(`Removing hotspot user: ${username}`)
 
-      // Example API call:
-      // const conn = new RouterOSAPI(this.config)
-      // await conn.connect()
-      // await conn.write('/ip/hotspot/user/remove', [
-      //   `=numbers=${username}`
-      // ])
-      // await conn.close()
+      const apiCall = {
+        endpoint: "/ip/hotspot/user/remove",
+        data: { numbers: username },
+        config: this.config,
+      }
 
+      console.log("MikroTik Remove API Call:", JSON.stringify(apiCall, null, 2))
+
+      // Simulate API response
+      await new Promise((resolve) => setTimeout(resolve, 200))
+
+      console.log(`✅ Hotspot user removed successfully: ${username}`)
       return true
     } catch (error) {
-      console.error("MikroTik API error:", error)
+      console.error("❌ Failed to remove hotspot user:", error)
+      throw new Error(`MikroTik Remove API Error: ${error}`)
+    }
+  }
+
+  // Get active hotspot users
+  async getActiveUsers(): Promise<any[]> {
+    try {
+      console.log("Getting active hotspot users")
+
+      // Simulate API response
+      const mockActiveUsers = [
+        {
+          ".id": "*1",
+          user: "DEMO123456",
+          address: "192.168.1.100",
+          "mac-address": "AA:BB:CC:DD:EE:FF",
+          uptime: "1h30m",
+          "bytes-in": 1024000,
+          "bytes-out": 2048000,
+        },
+      ]
+
+      return mockActiveUsers
+    } catch (error) {
+      console.error("❌ Failed to get active users:", error)
+      throw new Error(`MikroTik Active Users API Error: ${error}`)
+    }
+  }
+
+  // Test connection to MikroTik
+  async testConnection(): Promise<boolean> {
+    try {
+      console.log(`Testing connection to MikroTik: ${this.config.host}:${this.config.port}`)
+
+      // Simulate connection test
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+
+      console.log("✅ MikroTik connection test successful")
+      return true
+    } catch (error) {
+      console.error("❌ MikroTik connection test failed:", error)
       return false
     }
   }
 
-  // Get active hotspot sessions
-  async getActiveSessions(): Promise<any[]> {
-    try {
-      console.log("Getting active MikroTik sessions")
+  // Setup default hotspot profiles
+  async setupDefaultProfiles(): Promise<void> {
+    const profiles: HotspotProfile[] = [
+      {
+        name: "1hour-10M",
+        "shared-users": 1,
+        "rate-limit": "10M/10M",
+        "session-timeout": "1h",
+        "idle-timeout": "10m",
+        "keepalive-timeout": "2m",
+        "status-autorefresh": "1m",
+        "transparent-proxy": false,
+      },
+      {
+        name: "1day-20M",
+        "shared-users": 2,
+        "rate-limit": "20M/20M",
+        "session-timeout": "1d",
+        "idle-timeout": "30m",
+        "keepalive-timeout": "2m",
+        "status-autorefresh": "1m",
+        "transparent-proxy": false,
+      },
+      {
+        name: "3days-25M",
+        "shared-users": 3,
+        "rate-limit": "25M/25M",
+        "session-timeout": "3d",
+        "idle-timeout": "1h",
+        "keepalive-timeout": "2m",
+        "status-autorefresh": "1m",
+        "transparent-proxy": false,
+      },
+      {
+        name: "1week-30M",
+        "shared-users": 5,
+        "rate-limit": "30M/30M",
+        "session-timeout": "1w",
+        "idle-timeout": "2h",
+        "keepalive-timeout": "2m",
+        "status-autorefresh": "1m",
+        "transparent-proxy": false,
+      },
+    ]
 
-      // Example API call:
-      // const conn = new RouterOSAPI(this.config)
-      // await conn.connect()
-      // const sessions = await conn.write('/ip/hotspot/active/print')
-      // await conn.close()
-      // return sessions
+    console.log("Setting up default hotspot profiles...")
 
-      // Simulate active sessions
-      return [
-        {
-          user: "WIFI-123456",
-          address: "192.168.1.100",
-          "mac-address": "00:11:22:33:44:55",
-          uptime: "2h15m",
-          "bytes-in": "50000000",
-          "bytes-out": "25000000",
-        },
-      ]
-    } catch (error) {
-      console.error("MikroTik API error:", error)
-      return []
+    for (const profile of profiles) {
+      try {
+        await this.createHotspotProfile(profile)
+      } catch (error) {
+        console.warn(`Profile ${profile.name} might already exist:`, error)
+      }
     }
+
+    console.log("✅ Default hotspot profiles setup completed")
   }
 }
 

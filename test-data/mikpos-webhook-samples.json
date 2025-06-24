@@ -1,0 +1,83 @@
+{
+  "voucher_purchase_request": {
+    "action": "voucher_purchase_request",
+    "customer": {
+      "name": "John Doe",
+      "mac_address": "AA:BB:CC:DD:EE:FF",
+      "ip_address": "192.168.1.100",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    },
+    "hotspot": {
+      "interface": "ether1",
+      "server_name": "GARDENS-NET Hotspot",
+      "login_url": "http://192.168.1.1/login"
+    },
+    "requested_profile": "1day",
+    "timestamp": "2024-01-15T10:30:00.000Z"
+  },
+  "customer_redirect": {
+    "action": "customer_redirect",
+    "customer": {
+      "name": "Jane Smith",
+      "mac_address": "BB:CC:DD:EE:FF:AA",
+      "ip_address": "192.168.1.101"
+    },
+    "hotspot": {
+      "interface": "ether2",
+      "server_name": "GARDENS-NET Hotspot",
+      "login_url": "http://192.168.1.1/login"
+    },
+    "timestamp": "2024-01-15T10:35:00.000Z"
+  },
+  "payment_notification": {
+    "action": "payment_notification",
+    "customer": {
+      "name": "Bob Wilson",
+      "mac_address": "CC:DD:EE:FF:AA:BB",
+      "ip_address": "192.168.1.102"
+    },
+    "payment": {
+      "order_id": "ORDER-20240115-001",
+      "status": "success",
+      "amount": 15000,
+      "method": "qris",
+      "transaction_id": "TXN-123456789"
+    },
+    "timestamp": "2024-01-15T10:40:00.000Z"
+  },
+  "mobile_customer": {
+    "action": "voucher_purchase_request",
+    "customer": {
+      "name": "Mobile User",
+      "mac_address": "EE:FF:AA:BB:CC:DD",
+      "ip_address": "192.168.1.105",
+      "user_agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"
+    },
+    "hotspot": {
+      "interface": "wlan1",
+      "server_name": "GARDENS-NET Mobile",
+      "login_url": "http://192.168.1.1/login"
+    },
+    "requested_profile": "1hour",
+    "timestamp": "2024-01-15T11:00:00.000Z"
+  },
+  "bulk_customer": {
+    "action": "voucher_purchase_request",
+    "customer": {
+      "name": "Bulk Customer",
+      "mac_address": "FF:AA:BB:CC:DD:EE",
+      "ip_address": "192.168.1.106"
+    },
+    "hotspot": {
+      "interface": "ether1",
+      "server_name": "GARDENS-NET Hotspot",
+      "login_url": "http://192.168.1.1/login"
+    },
+    "requested_profile": "1week",
+    "bulk_purchase": {
+      "quantity": 5,
+      "discount": 10
+    },
+    "timestamp": "2024-01-15T11:15:00.000Z"
+  }
+}

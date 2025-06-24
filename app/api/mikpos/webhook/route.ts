@@ -1,44 +1,50 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { mikposIntegration } from "@/lib/mikpos-integration"
 
-interface MikPosWebhookData {
-  action: "redirect_purchase" | "voucher_request" | "payment_status"
+interface MikPosWebhookPayload {
+  action: "voucher_purchase_request" | "customer_redirect" | "payment_notification"
   customer: {
     name?: string
-    phone?: string
-    mac_address?: string
-    ip_address?: string
+    mac_address: string
+    ip_address: string
+    user_agent?: string
+    session_id?: string
   }
-  voucher: {
-    profile?: string
-    duration?: string
-    price?: number
+  hotspot: {
+    interface: string
+    server_name: string
+    login_url: string
   }
-  session_id?: string
-  redirect_url?: string
+  requested_profile?: string
+  timestamp: string
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const data: MikPosWebhookData = await request.json()
+    const payload = await request.text()
+    const signature = request.headers.get("x-mikpos-signature") || ""
 
-    // Verify webhook authenticity (add your secret key validation here)
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // Verify webhook signature
+    if (!mikposIntegration.verifyWebhookSignature(payload, signature)) {
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
     }
 
+    const data: MikPosWebhookPayload = JSON.parse(payload)
+
+    console.log("MikPos webhook received:", data.action, data.customer.ip_address)
+
     switch (data.action) {
-      case "redirect_purchase":
-        return handleRedirectPurchase(data)
+      case "voucher_purchase_request":
+        return await handleVoucherPurchaseRequest(data)
 
-      case "voucher_request":
-        return handleVoucherRequest(data)
+      case "customer_redirect":
+        return await handleCustomerRedirect(data)
 
-      case "payment_status":
-        return handlePaymentStatus(data)
+      case "payment_notification":
+        return await handlePaymentNotification(data)
 
       default:
-        return NextResponse.json({ error: "Invalid action" }, { status: 400 })
+        return NextResponse.json({ error: "Unknown action" }, { status: 400 })
     }
   } catch (error) {
     console.error("MikPos webhook error:", error)
@@ -46,84 +52,73 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function handleRedirectPurchase(data: MikPosWebhookData) {
-  // Generate session for MikPos customer
-  const sessionId = `mikpos_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+async function handleVoucherPurchaseRequest(data: MikPosWebhookPayload) {
+  try {
+    // Generate redirect URL for customer
+    const redirectUrl = await mikposIntegration.generateRedirectUrl({
+      name: data.customer.name || `Customer-${data.customer.ip_address}`,
+      mac_address: data.customer.mac_address,
+      ip_address: data.customer.ip_address,
+      requested_profile: data.requested_profile,
+      hotspot_info: data.hotspot,
+      user_agent: data.customer.user_agent,
+    })
 
-  // Store customer data temporarily
-  const customerData = {
-    name: data.customer.name || "Customer MikPos",
-    whatsapp: data.customer.phone || "",
-    mac_address: data.customer.mac_address,
-    ip_address: data.customer.ip_address,
-    session_id: sessionId,
-    source: "mikpos",
-    voucher_profile: data.voucher.profile,
-    created_at: new Date().toISOString(),
+    // Store session for tracking
+    const sessionId = redirectUrl.split("session=")[1]
+
+    // Log the request
+    console.log(`Voucher purchase request from ${data.customer.ip_address} (${data.customer.mac_address})`)
+    console.log(`Generated redirect URL: ${redirectUrl}`)
+
+    return NextResponse.json({
+      success: true,
+      redirect_url: redirectUrl,
+      session_id: sessionId,
+      message: "Redirect URL generated successfully",
+      expires_in: 1800, // 30 minutes
+    })
+  } catch (error) {
+    console.error("Error handling voucher purchase request:", error)
+    return NextResponse.json({ error: "Failed to generate redirect URL" }, { status: 500 })
   }
+}
 
-  // In production, store this in your database
-  // For demo, we'll use a simple in-memory store
-  global.mikposCustomers = global.mikposCustomers || new Map()
-  global.mikposCustomers.set(sessionId, customerData)
+async function handleCustomerRedirect(data: MikPosWebhookPayload) {
+  // Handle direct customer redirect from MikPos interface
+  try {
+    const redirectUrl = await mikposIntegration.generateRedirectUrl({
+      name: data.customer.name,
+      mac_address: data.customer.mac_address,
+      ip_address: data.customer.ip_address,
+      hotspot_info: data.hotspot,
+    })
 
-  // Create redirect URL to our website
-  const redirectUrl = `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/mikpos/redirect?session=${sessionId}`
+    return NextResponse.json({
+      success: true,
+      redirect_url: redirectUrl,
+      message: "Customer redirect processed",
+    })
+  } catch (error) {
+    console.error("Error handling customer redirect:", error)
+    return NextResponse.json({ error: "Failed to process redirect" }, { status: 500 })
+  }
+}
 
+async function handlePaymentNotification(data: MikPosWebhookPayload) {
+  // Handle payment status updates
   return NextResponse.json({
     success: true,
-    redirect_url: redirectUrl,
-    session_id: sessionId,
-    message: "Redirect URL generated successfully",
+    message: "Payment notification received",
   })
 }
 
-async function handleVoucherRequest(data: MikPosWebhookData) {
-  // Handle voucher generation request from MikPos
-  const sessionId = data.session_id
-
-  if (!sessionId) {
-    return NextResponse.json({ error: "Session ID required" }, { status: 400 })
-  }
-
-  // Get customer data
-  global.mikposCustomers = global.mikposCustomers || new Map()
-  const customerData = global.mikposCustomers.get(sessionId)
-
-  if (!customerData) {
-    return NextResponse.json({ error: "Session not found" }, { status: 404 })
-  }
-
-  // Generate voucher code
-  const voucherCode = `WIFI-${Math.random().toString(36).substr(2, 8).toUpperCase()}`
-
-  // In production, you would:
-  // 1. Validate payment status
-  // 2. Generate actual voucher in MikroTik
-  // 3. Store voucher in database
-  // 4. Send to customer via WhatsApp
-
-  return NextResponse.json({
-    success: true,
-    voucher_code: voucherCode,
-    customer: customerData,
-    message: "Voucher generated successfully",
-  })
-}
-
-async function handlePaymentStatus(data: MikPosWebhookData) {
-  // Handle payment status updates from payment gateway
-  return NextResponse.json({
-    success: true,
-    message: "Payment status updated",
-  })
-}
-
-export async function GET(request: NextRequest) {
-  // Health check endpoint
+// Health check endpoint
+export async function GET() {
   return NextResponse.json({
     status: "ok",
-    service: "GARDENS-NET MikPos Integration",
+    service: "GARDENS-NET MikPos Webhook",
     timestamp: new Date().toISOString(),
+    version: "1.0.0",
   })
 }

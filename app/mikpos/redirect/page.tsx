@@ -7,16 +7,23 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "@/hooks/use-toast"
-import { Wifi, Clock, Users, Zap, Phone, ShoppingCart } from "lucide-react"
+import { Wifi, Clock, Users, Zap, Phone, ShoppingCart, Router, Globe, CheckCircle, AlertCircle } from "lucide-react"
 
-interface CustomerData {
+interface CustomerSession {
   name: string
   mac_address: string
   ip_address: string
   session_id: string
-  voucher_profile?: string
+  hotspot_info: {
+    interface: string
+    server_name: string
+    login_url: string
+  }
+  requested_profile?: string
+  created_at: string
 }
 
 interface VoucherPackage {
@@ -28,56 +35,63 @@ interface VoucherPackage {
   concurrent_users: number
   description: string
   popular?: boolean
+  mikrotik_profile: string
 }
 
 const voucherPackages: VoucherPackage[] = [
   {
     id: "1hour",
-    name: "1 Jam",
+    name: "Express 1 Jam",
     duration: "1 Jam",
     price: 5000,
     bandwidth: "10 Mbps",
     concurrent_users: 1,
-    description: "Cocok untuk browsing ringan",
+    description: "Cocok untuk browsing cepat",
+    mikrotik_profile: "1hour-10M",
   },
   {
     id: "1day",
-    name: "1 Hari",
+    name: "Daily 1 Hari",
     duration: "24 Jam",
     price: 15000,
     bandwidth: "20 Mbps",
     concurrent_users: 2,
     description: "Paket harian untuk kebutuhan sehari-hari",
     popular: true,
+    mikrotik_profile: "1day-20M",
   },
   {
     id: "3days",
-    name: "3 Hari",
+    name: "Weekend 3 Hari",
     duration: "72 Jam",
     price: 35000,
     bandwidth: "25 Mbps",
     concurrent_users: 3,
-    description: "Hemat untuk penggunaan beberapa hari",
+    description: "Hemat untuk penggunaan akhir pekan",
+    mikrotik_profile: "3days-25M",
   },
   {
     id: "1week",
-    name: "1 Minggu",
+    name: "Weekly 1 Minggu",
     duration: "7 Hari",
     price: 75000,
     bandwidth: "30 Mbps",
     concurrent_users: 5,
     description: "Paket mingguan dengan bandwidth tinggi",
+    mikrotik_profile: "1week-30M",
   },
 ]
 
 export default function MikPosRedirectPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const [customerData, setCustomerData] = useState<CustomerData | null>(null)
+
+  const [customerSession, setCustomerSession] = useState<CustomerSession | null>(null)
   const [selectedPackage, setSelectedPackage] = useState<string>("")
   const [whatsappNumber, setWhatsappNumber] = useState("")
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
+  const [sessionExpired, setSessionExpired] = useState(false)
 
   const sessionId = searchParams.get("session")
 
@@ -85,45 +99,76 @@ export default function MikPosRedirectPage() {
     if (!sessionId) {
       toast({
         title: "Error",
-        description: "Session tidak valid",
+        description: "Session tidak valid atau telah berakhir",
         variant: "destructive",
       })
-      router.push("/")
+      setSessionExpired(true)
+      setLoading(false)
       return
     }
 
-    fetchCustomerData()
+    fetchCustomerSession()
+
+    // Check session expiry every 30 seconds
+    const interval = setInterval(checkSessionExpiry, 30000)
+    return () => clearInterval(interval)
   }, [sessionId])
 
-  const fetchCustomerData = async () => {
+  const fetchCustomerSession = async () => {
     try {
       const response = await fetch(`/api/mikpos/session/${sessionId}`)
+
       if (!response.ok) {
-        throw new Error("Session tidak ditemukan")
+        if (response.status === 404) {
+          setSessionExpired(true)
+          return
+        }
+        throw new Error("Gagal memuat session")
       }
 
       const data = await response.json()
-      setCustomerData(data.customer)
+      setCustomerSession(data.session)
 
-      // Pre-select package if specified
-      if (data.customer.voucher_profile) {
-        setSelectedPackage(data.customer.voucher_profile)
+      // Pre-select package if specified from MikPos
+      if (data.session.requested_profile) {
+        setSelectedPackage(data.session.requested_profile)
+      } else {
+        // Default to popular package
+        setSelectedPackage("1day")
       }
     } catch (error) {
-      console.error("Error fetching customer data:", error)
+      console.error("Error fetching session:", error)
       toast({
         title: "Error",
-        description: "Gagal memuat data customer",
+        description: "Gagal memuat data session",
         variant: "destructive",
       })
-      router.push("/")
+      setSessionExpired(true)
     } finally {
       setLoading(false)
     }
   }
 
+  const checkSessionExpiry = async () => {
+    if (!sessionId) return
+
+    try {
+      const response = await fetch(`/api/mikpos/session/${sessionId}/check`)
+      if (!response.ok) {
+        setSessionExpired(true)
+        toast({
+          title: "Session Berakhir",
+          description: "Session Anda telah berakhir. Silakan mulai ulang dari hotspot login.",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Session check error:", error)
+    }
+  }
+
   const handlePurchase = async () => {
-    if (!selectedPackage || !whatsappNumber) {
+    if (!selectedPackage || !whatsappNumber.trim()) {
       toast({
         title: "Error",
         description: "Pilih paket dan masukkan nomor WhatsApp",
@@ -134,10 +179,10 @@ export default function MikPosRedirectPage() {
 
     // Validate WhatsApp number
     const cleanNumber = whatsappNumber.replace(/\D/g, "")
-    if (cleanNumber.length < 10) {
+    if (cleanNumber.length < 10 || (!cleanNumber.startsWith("08") && !cleanNumber.startsWith("628"))) {
       toast({
         title: "Error",
-        description: "Nomor WhatsApp tidak valid",
+        description: "Format nomor WhatsApp tidak valid (08xxx atau 628xxx)",
         variant: "destructive",
       })
       return
@@ -147,8 +192,11 @@ export default function MikPosRedirectPage() {
 
     try {
       const selectedPkg = voucherPackages.find((pkg) => pkg.id === selectedPackage)
+      if (!selectedPkg) {
+        throw new Error("Paket tidak ditemukan")
+      }
 
-      // Create order in our system
+      // Create order
       const orderResponse = await fetch("/api/mikpos/order/create", {
         method: "POST",
         headers: {
@@ -157,32 +205,53 @@ export default function MikPosRedirectPage() {
         body: JSON.stringify({
           session_id: sessionId,
           package_id: selectedPackage,
+          mikrotik_profile: selectedPkg.mikrotik_profile,
           customer: {
-            ...customerData,
+            ...customerSession,
             whatsapp: cleanNumber,
           },
-          amount: selectedPkg?.price,
+          amount: selectedPkg.price,
+          source: "mikpos_hotspot",
         }),
       })
 
       if (!orderResponse.ok) {
-        throw new Error("Gagal membuat pesanan")
+        const errorData = await orderResponse.json()
+        throw new Error(errorData.message || "Gagal membuat pesanan")
       }
 
       const orderData = await orderResponse.json()
 
-      // Redirect to payment
-      router.push(`/checkout?order_id=${orderData.order_id}&source=mikpos`)
+      // Store order info for checkout
+      sessionStorage.setItem(
+        "mikpos_order",
+        JSON.stringify({
+          order_id: orderData.order_id,
+          session_id: sessionId,
+          return_url: customerSession?.hotspot_info.login_url,
+        }),
+      )
+
+      // Redirect to checkout with MikPos context
+      router.push(`/checkout?order_id=${orderData.order_id}&source=mikpos&session=${sessionId}`)
     } catch (error) {
       console.error("Error creating order:", error)
       toast({
         title: "Error",
-        description: "Gagal memproses pesanan",
+        description: error instanceof Error ? error.message : "Gagal memproses pesanan",
         variant: "destructive",
       })
     } finally {
       setProcessing(false)
     }
+  }
+
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      minimumFractionDigits: 0,
+    }).format(price)
   }
 
   if (loading) {
@@ -211,20 +280,62 @@ export default function MikPosRedirectPage() {
     )
   }
 
+  if (sessionExpired) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-100 p-4">
+        <div className="max-w-2xl mx-auto pt-16">
+          <Card className="border-red-200">
+            <CardHeader className="text-center">
+              <div className="flex justify-center mb-4">
+                <AlertCircle className="h-16 w-16 text-red-500" />
+              </div>
+              <CardTitle className="text-2xl text-red-700">Session Berakhir</CardTitle>
+              <CardDescription className="text-red-600">Session Anda telah berakhir atau tidak valid</CardDescription>
+            </CardHeader>
+            <CardContent className="text-center space-y-4">
+              <p className="text-gray-600">Untuk membeli voucher WiFi, silakan:</p>
+              <ol className="text-left text-sm text-gray-600 space-y-2">
+                <li>1. Kembali ke halaman login hotspot MikroTik</li>
+                <li>2. Klik menu "Beli Voucher" atau "Purchase Voucher"</li>
+                <li>3. Anda akan diarahkan kembali ke halaman ini</li>
+              </ol>
+              <Button onClick={() => window.close()} variant="outline" className="mt-4">
+                Tutup Halaman
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="max-w-4xl mx-auto pt-8">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center mb-4">
-            <Wifi className="h-8 w-8 text-blue-600 mr-2" />
+            <Router className="h-8 w-8 text-blue-600 mr-2" />
             <h1 className="text-3xl font-bold text-gray-900">GARDENS-NET WiFi</h1>
           </div>
-          <p className="text-gray-600">
-            Selamat datang {customerData?.name || "Customer"}! Pilih paket voucher WiFi Anda
-          </p>
-          <div className="mt-2 text-sm text-gray-500">
-            IP: {customerData?.ip_address} | MAC: {customerData?.mac_address}
+          <p className="text-gray-600 mb-2">Selamat datang {customerSession?.name}! Pilih paket voucher WiFi Anda</p>
+
+          {/* Connection Info */}
+          <div className="bg-white rounded-lg p-4 mb-6 shadow-sm">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div className="flex items-center justify-center">
+                <Globe className="h-4 w-4 mr-2 text-blue-500" />
+                <span>IP: {customerSession?.ip_address}</span>
+              </div>
+              <div className="flex items-center justify-center">
+                <Wifi className="h-4 w-4 mr-2 text-green-500" />
+                <span>MAC: {customerSession?.mac_address}</span>
+              </div>
+              <div className="flex items-center justify-center">
+                <Router className="h-4 w-4 mr-2 text-purple-500" />
+                <span>Server: {customerSession?.hotspot_info.server_name}</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -234,7 +345,7 @@ export default function MikPosRedirectPage() {
             <Card
               key={pkg.id}
               className={`cursor-pointer transition-all duration-200 hover:shadow-lg ${
-                selectedPackage === pkg.id ? "ring-2 ring-blue-500 shadow-lg" : "hover:shadow-md"
+                selectedPackage === pkg.id ? "ring-2 ring-blue-500 shadow-lg bg-blue-50" : "hover:shadow-md"
               } ${pkg.popular ? "border-blue-500" : ""}`}
               onClick={() => setSelectedPackage(pkg.id)}
             >
@@ -247,9 +358,7 @@ export default function MikPosRedirectPage() {
                     </Badge>
                   )}
                 </div>
-                <CardDescription className="text-2xl font-bold text-blue-600">
-                  Rp {pkg.price.toLocaleString("id-ID")}
-                </CardDescription>
+                <CardDescription className="text-2xl font-bold text-blue-600">{formatPrice(pkg.price)}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-center text-sm text-gray-600">
@@ -265,6 +374,12 @@ export default function MikPosRedirectPage() {
                   {pkg.concurrent_users} device
                 </div>
                 <p className="text-xs text-gray-500 mt-2">{pkg.description}</p>
+                {selectedPackage === pkg.id && (
+                  <div className="flex items-center text-xs text-blue-600 font-medium">
+                    <CheckCircle className="h-3 w-3 mr-1" />
+                    Dipilih
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
@@ -277,36 +392,41 @@ export default function MikPosRedirectPage() {
               <Phone className="h-5 w-5 mr-2" />
               Nomor WhatsApp
             </CardTitle>
-            <CardDescription>Voucher akan dikirim ke nomor WhatsApp ini setelah pembayaran berhasil</CardDescription>
+            <CardDescription>
+              Kode voucher akan dikirim ke nomor WhatsApp ini setelah pembayaran berhasil
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              <Label htmlFor="whatsapp">Nomor WhatsApp</Label>
+              <Label htmlFor="whatsapp">Nomor WhatsApp *</Label>
               <Input
                 id="whatsapp"
                 type="tel"
-                placeholder="08123456789"
+                placeholder="08123456789 atau 628123456789"
                 value={whatsappNumber}
                 onChange={(e) => setWhatsappNumber(e.target.value)}
                 className="text-lg"
+                required
               />
-              <p className="text-xs text-gray-500">Format: 08123456789 (tanpa +62 atau spasi)</p>
+              <p className="text-xs text-gray-500">
+                Format: 08123456789 atau 628123456789 (tanpa spasi atau tanda hubung)
+              </p>
             </div>
           </CardContent>
         </Card>
 
         {/* Purchase Button */}
-        <div className="text-center">
+        <div className="text-center mb-8">
           <Button
             onClick={handlePurchase}
-            disabled={!selectedPackage || !whatsappNumber || processing}
+            disabled={!selectedPackage || !whatsappNumber.trim() || processing}
             size="lg"
-            className="w-full md:w-auto px-8 py-3 text-lg"
+            className="w-full md:w-auto px-8 py-3 text-lg bg-blue-600 hover:bg-blue-700"
           >
             {processing ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                Memproses...
+                Memproses Pesanan...
               </>
             ) : (
               <>
@@ -314,7 +434,7 @@ export default function MikPosRedirectPage() {
                 Beli Voucher
                 {selectedPackage && (
                   <span className="ml-2">
-                    - Rp {voucherPackages.find((p) => p.id === selectedPackage)?.price.toLocaleString("id-ID")}
+                    - {formatPrice(voucherPackages.find((p) => p.id === selectedPackage)?.price || 0)}
                   </span>
                 )}
               </>
@@ -322,11 +442,19 @@ export default function MikPosRedirectPage() {
           </Button>
         </div>
 
-        {/* Info */}
-        <div className="mt-8 text-center text-sm text-gray-500">
-          <p>Voucher akan aktif setelah pembayaran berhasil</p>
-          <p>Kode voucher akan dikirim via WhatsApp dalam 1-2 menit</p>
-        </div>
+        {/* Info Alert */}
+        <Alert className="bg-blue-50 border-blue-200">
+          <CheckCircle className="h-4 w-4 text-blue-600" />
+          <AlertDescription className="text-blue-800">
+            <strong>Informasi Penting:</strong>
+            <ul className="mt-2 space-y-1 text-sm">
+              <li>• Voucher akan aktif setelah pembayaran berhasil</li>
+              <li>• Kode voucher dikirim via WhatsApp dalam 1-2 menit</li>
+              <li>• Setelah pembayaran, Anda akan kembali ke halaman login hotspot</li>
+              <li>• Gunakan kode voucher untuk login dan mulai browsing</li>
+            </ul>
+          </AlertDescription>
+        </Alert>
       </div>
     </div>
   )

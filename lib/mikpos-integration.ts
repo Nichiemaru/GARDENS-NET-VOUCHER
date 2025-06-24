@@ -7,6 +7,21 @@ interface MikPosConfig {
   webhookSecret: string
 }
 
+interface CustomerSession {
+  name: string
+  mac_address: string
+  ip_address: string
+  session_id: string
+  hotspot_info?: {
+    interface: string
+    server_name: string
+    login_url: string
+  }
+  user_agent?: string
+  requested_profile?: string
+  created_at: string
+}
+
 interface VoucherProfile {
   name: string
   duration: string
@@ -14,40 +29,45 @@ interface VoucherProfile {
   bandwidth: string
   concurrent_users: number
   uptime_limit: string
+  mikrotik_profile: string
 }
 
 const VOUCHER_PROFILES: Record<string, VoucherProfile> = {
   "1hour": {
-    name: "1 Jam",
+    name: "Express 1 Jam",
     duration: "1 Jam",
     price: 5000,
     bandwidth: "10 Mbps",
     concurrent_users: 1,
     uptime_limit: "1h",
+    mikrotik_profile: "1hour-10M",
   },
   "1day": {
-    name: "1 Hari",
+    name: "Daily 1 Hari",
     duration: "24 Jam",
     price: 15000,
     bandwidth: "20 Mbps",
     concurrent_users: 2,
     uptime_limit: "1d",
+    mikrotik_profile: "1day-20M",
   },
   "3days": {
-    name: "3 Hari",
+    name: "Weekend 3 Hari",
     duration: "72 Jam",
     price: 35000,
     bandwidth: "25 Mbps",
     concurrent_users: 3,
     uptime_limit: "3d",
+    mikrotik_profile: "3days-25M",
   },
   "1week": {
-    name: "1 Minggu",
+    name: "Weekly 1 Minggu",
     duration: "7 Hari",
     price: 75000,
     bandwidth: "30 Mbps",
     concurrent_users: 5,
     uptime_limit: "1w",
+    mikrotik_profile: "1week-30M",
   },
 }
 
@@ -58,52 +78,68 @@ export class MikPosIntegration {
     this.config = config
   }
 
-  // Generate redirect URL for MikPos customers
+  // Generate redirect URL for customers from MikroTik hotspot login page
   async generateRedirectUrl(customerData: {
     name?: string
     mac_address: string
     ip_address: string
     requested_profile?: string
+    hotspot_info?: any
+    user_agent?: string
   }): Promise<string> {
     const sessionId = `mikpos_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
-    // Store customer session
-    await this.storeCustomerSession(sessionId, {
-      ...customerData,
-      name: customerData.name || "Customer MikPos",
+    // Create customer session
+    const session: CustomerSession = {
+      name: customerData.name || `Customer-${customerData.ip_address}`,
+      mac_address: customerData.mac_address,
+      ip_address: customerData.ip_address,
+      session_id: sessionId,
+      hotspot_info: customerData.hotspot_info || {
+        interface: "ether1",
+        server_name: "GARDENS-NET Hotspot",
+        login_url: `http://${customerData.ip_address.split(".").slice(0, 3).join(".")}.1/login`,
+      },
+      user_agent: customerData.user_agent,
+      requested_profile: customerData.requested_profile,
       created_at: new Date().toISOString(),
-    })
+    }
+
+    // Store session (in production, use database)
+    await this.storeCustomerSession(sessionId, session)
+
+    console.log(`Generated session for customer ${customerData.ip_address}: ${sessionId}`)
 
     return `${process.env.NEXT_PUBLIC_BASE_URL}/mikpos/redirect?session=${sessionId}`
   }
 
   // Create voucher in MikroTik system
   async createVoucher(
-    profile: string,
+    profileId: string,
     customerData: any,
   ): Promise<{
     code: string
     expires_at: string
   }> {
     try {
-      const voucherCode = this.generateVoucherCode(profile)
-      const expiresAt = this.calculateExpiryDate(profile)
-      const profileData = VOUCHER_PROFILES[profile]
-
-      if (!profileData) {
-        throw new Error(`Invalid profile: ${profile}`)
+      const profile = VOUCHER_PROFILES[profileId]
+      if (!profile) {
+        throw new Error(`Invalid profile: ${profileId}`)
       }
 
-      // Create user in MikroTik
+      const voucherCode = this.generateVoucherCode(profileId)
+      const expiresAt = this.calculateExpiryDate(profileId)
+
+      // Create user in MikroTik RouterOS
       await mikrotikAPI.createHotspotUser({
         name: voucherCode,
         password: voucherCode,
-        profile: profile,
-        "limit-uptime": profileData.uptime_limit,
-        comment: `Customer: ${customerData.name} | WhatsApp: ${customerData.whatsapp}`,
+        profile: profile.mikrotik_profile,
+        "limit-uptime": profile.uptime_limit,
+        comment: `Customer: ${customerData.name} | WhatsApp: ${customerData.whatsapp} | IP: ${customerData.ip_address}`,
       })
 
-      console.log(`Voucher created in MikroTik: ${voucherCode}`)
+      console.log(`Voucher created in MikroTik: ${voucherCode} (Profile: ${profile.mikrotik_profile})`)
 
       return {
         code: voucherCode,
@@ -115,7 +151,7 @@ export class MikPosIntegration {
     }
   }
 
-  // Send voucher to customer via WhatsApp
+  // Send voucher notification via WhatsApp
   async sendVoucherNotification(
     whatsapp: string,
     voucher: {
@@ -125,68 +161,144 @@ export class MikPosIntegration {
     },
   ): Promise<boolean> {
     try {
-      return await whatsappAPI.sendVoucherNotification(whatsapp, voucher)
+      const profile = VOUCHER_PROFILES[voucher.profile]
+      const message = this.formatVoucherMessage({
+        ...voucher,
+        profile_name: profile?.name || voucher.profile,
+        bandwidth: profile?.bandwidth || "N/A",
+        duration: profile?.duration || "N/A",
+      })
+
+      return await whatsappAPI.sendTextMessage(whatsapp, message)
     } catch (error) {
-      console.error("Failed to send WhatsApp:", error)
+      console.error("Failed to send WhatsApp notification:", error)
       return false
     }
   }
 
-  // Get voucher status from MikroTik
-  async getVoucherStatus(voucherCode: string): Promise<any> {
+  // Get customer session
+  async getCustomerSession(sessionId: string): Promise<CustomerSession | null> {
     try {
-      return await mikrotikAPI.getHotspotUser(voucherCode)
+      // In production, fetch from database
+      global.mikposCustomers = global.mikposCustomers || new Map()
+      return global.mikposCustomers.get(sessionId) || null
     } catch (error) {
-      console.error("Failed to get voucher status:", error)
+      console.error("Failed to get customer session:", error)
       return null
     }
   }
 
-  // Remove expired vouchers
-  async cleanupExpiredVouchers(): Promise<void> {
+  // Store customer session
+  private async storeCustomerSession(sessionId: string, session: CustomerSession): Promise<void> {
     try {
-      // Get all vouchers from storage
-      global.mikposVouchers = global.mikposVouchers || new Map()
+      // In production, store in database
+      global.mikposCustomers = global.mikposCustomers || new Map()
+      global.mikposCustomers.set(sessionId, session)
 
-      const now = new Date()
-      const expiredVouchers: string[] = []
-
-      for (const [code, voucher] of global.mikposVouchers.entries()) {
-        const expiresAt = new Date(voucher.expires_at)
-        if (now > expiresAt && voucher.status === "active") {
-          expiredVouchers.push(code)
-        }
-      }
-
-      // Remove expired vouchers from MikroTik
-      for (const code of expiredVouchers) {
-        await mikrotikAPI.removeHotspotUser(code)
-
-        // Update status in storage
-        const voucher = global.mikposVouchers.get(code)
-        if (voucher) {
-          voucher.status = "expired"
-          global.mikposVouchers.set(code, voucher)
-        }
-      }
-
-      console.log(`Cleaned up ${expiredVouchers.length} expired vouchers`)
+      // Set expiry (30 minutes)
+      setTimeout(
+        () => {
+          global.mikposCustomers?.delete(sessionId)
+          console.log(`Session expired and removed: ${sessionId}`)
+        },
+        30 * 60 * 1000,
+      )
     } catch (error) {
-      console.error("Failed to cleanup expired vouchers:", error)
+      console.error("Failed to store customer session:", error)
+      throw error
     }
   }
 
-  // Verify webhook signature from MikPos
-  verifyWebhookSignature(payload: string, signature: string): boolean {
-    // In production, implement proper signature verification
-    // const crypto = require('crypto')
-    // const expectedSignature = crypto
-    //   .createHmac('sha256', this.config.webhookSecret)
-    //   .update(payload)
-    //   .digest('hex')
-    // return signature === `sha256=${expectedSignature}`
+  // Generate unique voucher code
+  private generateVoucherCode(profileId: string): string {
+    const prefix = profileId.toUpperCase().substring(0, 2)
+    const timestamp = Date.now().toString().slice(-6)
+    const random = Math.random().toString(36).substr(2, 4).toUpperCase()
+    return `${prefix}${timestamp}${random}`
+  }
 
-    return true // For demo purposes
+  // Calculate voucher expiry date
+  private calculateExpiryDate(profileId: string): string {
+    const profile = VOUCHER_PROFILES[profileId]
+    if (!profile) {
+      throw new Error(`Invalid profile: ${profileId}`)
+    }
+
+    const now = new Date()
+    let expiryDate: Date
+
+    switch (profileId) {
+      case "1hour":
+        expiryDate = new Date(now.getTime() + 1 * 60 * 60 * 1000) // 1 hour
+        break
+      case "1day":
+        expiryDate = new Date(now.getTime() + 24 * 60 * 60 * 1000) // 1 day
+        break
+      case "3days":
+        expiryDate = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000) // 3 days
+        break
+      case "1week":
+        expiryDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) // 1 week
+        break
+      default:
+        expiryDate = new Date(now.getTime() + 24 * 60 * 60 * 1000) // Default 1 day
+    }
+
+    return expiryDate.toISOString()
+  }
+
+  // Format WhatsApp message
+  private formatVoucherMessage(data: {
+    code: string
+    profile_name: string
+    bandwidth: string
+    duration: string
+    expires_at: string
+  }): string {
+    const expiryDate = new Date(data.expires_at).toLocaleDateString("id-ID", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+
+    return `🎉 *VOUCHER WIFI GARDENS-NET* 🎉
+
+✅ *Kode Voucher:* \`${data.code}\`
+📦 *Paket:* ${data.profile_name}
+⚡ *Bandwidth:* ${data.bandwidth}
+⏰ *Durasi:* ${data.duration}
+📅 *Berlaku hingga:* ${expiryDate}
+
+*CARA PENGGUNAAN:*
+1️⃣ Buka browser dan akses halaman login WiFi
+2️⃣ Masukkan kode voucher: \`${data.code}\`
+3️⃣ Klik "Connect" atau "Login"
+4️⃣ Selamat browsing! 🌐
+
+⚠️ *PENTING:*
+• Simpan kode voucher ini dengan baik
+• Voucher hanya bisa digunakan sekali
+• Hubungi admin jika ada kendala
+
+Terima kasih telah menggunakan GARDENS-NET WiFi! 🙏
+
+_Powered by MikPos Integration_`
+  }
+
+  // Verify webhook signature
+  verifyWebhookSignature(payload: string, signature: string): boolean {
+    try {
+      const crypto = require("crypto")
+      const expectedSignature = crypto.createHmac("sha256", this.config.webhookSecret).update(payload).digest("hex")
+
+      return signature === `sha256=${expectedSignature}`
+    } catch (error) {
+      console.error("Webhook signature verification failed:", error)
+      return false
+    }
   }
 
   // Get profile information
@@ -198,58 +310,11 @@ export class MikPosIntegration {
   getAllProfiles(): Record<string, VoucherProfile> {
     return VOUCHER_PROFILES
   }
-
-  private async storeCustomerSession(sessionId: string, customerData: any): Promise<void> {
-    // In production, store in database
-    // For demo, use in-memory storage
-    global.mikposCustomers = global.mikposCustomers || new Map()
-    global.mikposCustomers.set(sessionId, {
-      ...customerData,
-      session_id: sessionId,
-    })
-  }
-
-  private generateVoucherCode(profile: string): string {
-    const prefix = profile.toUpperCase().substring(0, 4)
-    const timestamp = Date.now().toString().slice(-6)
-    const random = Math.random().toString(36).substring(2, 6).toUpperCase()
-    return `${prefix}-${timestamp}-${random}`
-  }
-
-  private calculateExpiryDate(profile: string): string {
-    const now = new Date()
-    const profileData = VOUCHER_PROFILES[profile]
-
-    if (!profileData) {
-      // Default to 1 day
-      now.setDate(now.getDate() + 1)
-      return now.toISOString()
-    }
-
-    switch (profile) {
-      case "1hour":
-        now.setHours(now.getHours() + 1)
-        break
-      case "1day":
-        now.setDate(now.getDate() + 1)
-        break
-      case "3days":
-        now.setDate(now.getDate() + 3)
-        break
-      case "1week":
-        now.setDate(now.getDate() + 7)
-        break
-      default:
-        now.setDate(now.getDate() + 1)
-    }
-
-    return now.toISOString()
-  }
 }
 
 // Export singleton instance
 export const mikposIntegration = new MikPosIntegration({
   baseUrl: process.env.MIKPOS_BASE_URL || "http://localhost:8080",
-  apiKey: process.env.MIKPOS_API_KEY || "your-api-key",
-  webhookSecret: process.env.MIKPOS_WEBHOOK_SECRET || "your-webhook-secret",
+  apiKey: process.env.MIKPOS_API_KEY || "",
+  webhookSecret: process.env.MIKPOS_WEBHOOK_SECRET || "default-secret",
 })

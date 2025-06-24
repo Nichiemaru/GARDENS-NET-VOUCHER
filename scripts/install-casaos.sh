@@ -46,6 +46,21 @@ cp docker-compose.yml $APP_DIR/
 cp -r nginx $APP_DIR/
 cp -r scripts $APP_DIR/
 
+# Configure MikPos integration
+echo -e "${BLUE}🔧 Configuring MikPos integration...${NC}"
+if [ -f "scripts/configure-mikpos-env.sh" ]; then
+    chmod +x scripts/configure-mikpos-env.sh
+    echo -e "${YELLOW}Please configure MikPos settings:${NC}"
+    ./scripts/configure-mikpos-env.sh
+fi
+
+# Setup MikPos webhook
+echo -e "${BLUE}📡 Setting up MikPos webhook...${NC}"
+if [ -f "scripts/setup-mikpos-webhook.sh" ]; then
+    chmod +x scripts/setup-mikpos-webhook.sh
+    cp scripts/setup-mikpos-webhook.sh $APP_DIR/
+fi
+
 # Generate SSL certificates (self-signed for local use)
 echo -e "${BLUE}🔐 Generating SSL certificates...${NC}"
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \

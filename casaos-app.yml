@@ -1,0 +1,67 @@
+# CasaOS App Configuration for GARDENS-NET E-commerce
+name: gardens-net-ecommerce
+services:
+  app:
+    image: gardens-net:latest
+    deploy:
+      resources:
+        reservations:
+          memory: 512M
+        limits:
+          memory: 1G
+    network_mode: bridge
+    ports:
+      - target: 3000
+        published: "3000"
+        protocol: tcp
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://gardens_user:gardens_secure_password_2024@postgres:5432/gardens_net
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: /DATA/AppData/gardens-net/uploads
+        target: /app/public/uploads
+      - type: bind
+        source: /DATA/AppData/gardens-net/logs
+        target: /app/logs
+    x-casaos:
+      envs:
+        - container: NODE_ENV
+          description:
+            en_us: Node.js Environment
+        - container: DATABASE_URL
+          description:
+            en_us: Database Connection URL
+      ports:
+        - container: "3000"
+          description:
+            en_us: Web UI Port
+      volumes:
+        - container: /app/public/uploads
+          description:
+            en_us: Upload Directory
+        - container: /app/logs
+          description:
+            en_us: Application Logs
+    container_name: gardens-net-app
+x-casaos:
+  architectures:
+    - amd64
+    - arm64
+  main: app
+  description:
+    en_us: GARDENS-NET E-commerce - Internet voucher management system with MikPos integration
+  tagline:
+    en_us: Complete e-commerce solution for internet service providers
+  developer: GARDENS-NET
+  author: GARDENS-NET Team
+  icon: https://cdn.jsdelivr.net/gh/IceWhaleTech/CasaOS-AppStore@main/Apps/gardens-net/icon.png
+  screenshot_link:
+    - https://cdn.jsdelivr.net/gh/IceWhaleTech/CasaOS-AppStore@main/Apps/gardens-net/screenshot-1.png
+    - https://cdn.jsdelivr.net/gh/IceWhaleTech/CasaOS-AppStore@main/Apps/gardens-net/screenshot-2.png
+  thumbnail: https://cdn.jsdelivr.net/gh/IceWhaleTech/CasaOS-AppStore@main/Apps/gardens-net/thumbnail.png
+  title:
+    en_us: GARDENS-NET E-commerce
+  category: Network
+  port_map: "3000"

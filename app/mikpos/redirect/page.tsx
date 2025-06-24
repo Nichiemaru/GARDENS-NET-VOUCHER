@@ -1,375 +1,331 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { Button } from "@/components/ui/button"
+import { useEffect, useState } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Wifi, Smartphone, AlertCircle, CheckCircle, Clock } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
+import { toast } from "@/hooks/use-toast"
+import { Wifi, Clock, Users, Zap, Phone, ShoppingCart } from "lucide-react"
 
-interface MikPosCustomer {
+interface CustomerData {
   name: string
-  whatsapp: string
-  mac_address?: string
-  ip_address?: string
+  mac_address: string
+  ip_address: string
   session_id: string
-  source: string
   voucher_profile?: string
-  created_at: string
 }
 
-interface VoucherProfile {
+interface VoucherPackage {
   id: string
   name: string
   duration: string
   price: number
-  description: string
   bandwidth: string
+  concurrent_users: number
+  description: string
+  popular?: boolean
 }
 
-const availableProfiles: VoucherProfile[] = [
+const voucherPackages: VoucherPackage[] = [
   {
     id: "1hour",
-    name: "Voucher WiFi 1 Jam",
+    name: "1 Jam",
     duration: "1 Jam",
-    price: 2000,
-    description: "Akses internet selama 1 jam",
-    bandwidth: "2 Mbps",
+    price: 5000,
+    bandwidth: "10 Mbps",
+    concurrent_users: 1,
+    description: "Cocok untuk browsing ringan",
   },
   {
     id: "1day",
-    name: "Voucher WiFi 1 Hari",
-    duration: "1 Hari",
-    price: 5000,
-    description: "Akses internet selama 1 hari penuh",
-    bandwidth: "5 Mbps",
+    name: "1 Hari",
+    duration: "24 Jam",
+    price: 15000,
+    bandwidth: "20 Mbps",
+    concurrent_users: 2,
+    description: "Paket harian untuk kebutuhan sehari-hari",
+    popular: true,
   },
   {
     id: "3days",
-    name: "Voucher WiFi 3 Hari",
-    duration: "3 Hari",
-    price: 12000,
-    description: "Akses internet selama 3 hari",
-    bandwidth: "5 Mbps",
+    name: "3 Hari",
+    duration: "72 Jam",
+    price: 35000,
+    bandwidth: "25 Mbps",
+    concurrent_users: 3,
+    description: "Hemat untuk penggunaan beberapa hari",
   },
   {
     id: "1week",
-    name: "Voucher WiFi 1 Minggu",
-    duration: "1 Minggu",
-    price: 25000,
-    description: "Akses internet selama 1 minggu",
-    bandwidth: "10 Mbps",
+    name: "1 Minggu",
+    duration: "7 Hari",
+    price: 75000,
+    bandwidth: "30 Mbps",
+    concurrent_users: 5,
+    description: "Paket mingguan dengan bandwidth tinggi",
   },
 ]
 
-export default function MikPosRedirect() {
-  const router = useRouter()
+export default function MikPosRedirectPage() {
   const searchParams = useSearchParams()
-  const sessionId = searchParams.get("session")
-
-  const [customerData, setCustomerData] = useState<MikPosCustomer | null>(null)
-  const [selectedProfile, setSelectedProfile] = useState<string>("")
+  const router = useRouter()
+  const [customerData, setCustomerData] = useState<CustomerData | null>(null)
+  const [selectedPackage, setSelectedPackage] = useState<string>("")
   const [whatsappNumber, setWhatsappNumber] = useState("")
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState("")
-  const [isProcessing, setIsProcessing] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [processing, setProcessing] = useState(false)
+
+  const sessionId = searchParams.get("session")
 
   useEffect(() => {
     if (!sessionId) {
-      setError("Session ID tidak ditemukan")
-      setIsLoading(false)
+      toast({
+        title: "Error",
+        description: "Session tidak valid",
+        variant: "destructive",
+      })
+      router.push("/")
       return
     }
 
-    // Load customer data from MikPos session
-    loadCustomerData()
+    fetchCustomerData()
   }, [sessionId])
 
-  const loadCustomerData = async () => {
+  const fetchCustomerData = async () => {
     try {
-      // In production, this would fetch from your database
-      // For demo, we'll simulate the data
-      const mockCustomerData: MikPosCustomer = {
-        name: "Customer MikPos",
-        whatsapp: "",
-        mac_address: "AA:BB:CC:DD:EE:FF",
-        ip_address: "192.168.1.100",
-        session_id: sessionId!,
-        source: "mikpos",
-        voucher_profile: "1day",
-        created_at: new Date().toISOString(),
+      const response = await fetch(`/api/mikpos/session/${sessionId}`)
+      if (!response.ok) {
+        throw new Error("Session tidak ditemukan")
       }
 
-      setCustomerData(mockCustomerData)
-      setSelectedProfile(mockCustomerData.voucher_profile || "1day")
-      setWhatsappNumber(mockCustomerData.whatsapp || "")
+      const data = await response.json()
+      setCustomerData(data.customer)
+
+      // Pre-select package if specified
+      if (data.customer.voucher_profile) {
+        setSelectedPackage(data.customer.voucher_profile)
+      }
     } catch (error) {
-      setError("Gagal memuat data customer")
+      console.error("Error fetching customer data:", error)
+      toast({
+        title: "Error",
+        description: "Gagal memuat data customer",
+        variant: "destructive",
+      })
+      router.push("/")
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
   const handlePurchase = async () => {
-    if (!selectedProfile) {
-      setError("Silakan pilih paket voucher")
+    if (!selectedPackage || !whatsappNumber) {
+      toast({
+        title: "Error",
+        description: "Pilih paket dan masukkan nomor WhatsApp",
+        variant: "destructive",
+      })
       return
     }
 
-    if (!whatsappNumber.trim()) {
-      setError("Nomor WhatsApp wajib diisi")
-      return
-    }
-
-    // Validate WhatsApp number format
+    // Validate WhatsApp number
     const cleanNumber = whatsappNumber.replace(/\D/g, "")
-    if (!cleanNumber.match(/^(62|08)/)) {
-      setError("Format nomor WhatsApp tidak valid (gunakan 62xxx atau 08xxx)")
+    if (cleanNumber.length < 10) {
+      toast({
+        title: "Error",
+        description: "Nomor WhatsApp tidak valid",
+        variant: "destructive",
+      })
       return
     }
 
-    setIsProcessing(true)
-    setError("")
+    setProcessing(true)
 
     try {
-      const selectedVoucher = availableProfiles.find((p) => p.id === selectedProfile)
-      if (!selectedVoucher) {
-        throw new Error("Paket voucher tidak ditemukan")
-      }
+      const selectedPkg = voucherPackages.find((pkg) => pkg.id === selectedPackage)
 
-      // Create order for MikPos customer
-      const orderData = {
-        id: `MIKPOS-${Date.now()}`,
-        customer: {
-          name: customerData?.name || "Customer MikPos",
-          whatsapp: whatsappNumber,
-          mac_address: customerData?.mac_address,
-          ip_address: customerData?.ip_address,
+      // Create order in our system
+      const orderResponse = await fetch("/api/mikpos/order/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-        items: [
-          {
-            id: selectedVoucher.id,
-            name: selectedVoucher.name,
-            price: selectedVoucher.price,
-            category: "wifi" as const,
-            quantity: 1,
+        body: JSON.stringify({
+          session_id: sessionId,
+          package_id: selectedPackage,
+          customer: {
+            ...customerData,
+            whatsapp: cleanNumber,
           },
-        ],
-        total: selectedVoucher.price,
-        paymentMethod: "mikpos_integration",
-        status: "pending",
-        source: "mikpos",
-        session_id: sessionId,
-        createdAt: new Date().toISOString(),
+          amount: selectedPkg?.price,
+        }),
+      })
+
+      if (!orderResponse.ok) {
+        throw new Error("Gagal membuat pesanan")
       }
 
-      // Store order data
-      sessionStorage.setItem("currentOrder", JSON.stringify(orderData))
-      sessionStorage.setItem(
-        "userData",
-        JSON.stringify({
-          name: customerData?.name || "Customer MikPos",
-          whatsapp: whatsappNumber,
-        }),
-      )
+      const orderData = await orderResponse.json()
 
-      // Redirect to checkout
-      router.push("/checkout")
+      // Redirect to payment
+      router.push(`/checkout?order_id=${orderData.order_id}&source=mikpos`)
     } catch (error) {
-      console.error("Purchase error:", error)
-      setError("Terjadi kesalahan saat memproses pembelian")
+      console.error("Error creating order:", error)
+      toast({
+        title: "Error",
+        description: "Gagal memproses pesanan",
+        variant: "destructive",
+      })
     } finally {
-      setIsProcessing(false)
+      setProcessing(false)
     }
   }
 
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      minimumFractionDigits: 0,
-    }).format(price)
-  }
-
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4" />
-          <p className="text-gray-600">Memuat data customer...</p>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+        <div className="max-w-4xl mx-auto pt-8">
+          <div className="text-center mb-8">
+            <Skeleton className="h-8 w-64 mx-auto mb-2" />
+            <Skeleton className="h-4 w-48 mx-auto" />
+          </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i}>
+                <CardHeader>
+                  <Skeleton className="h-6 w-20" />
+                  <Skeleton className="h-4 w-32" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-20 w-full" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-4">
-              <Wifi className="h-8 w-8 text-green-600" />
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">GARDENS-NET</h1>
-                <p className="text-sm text-gray-500">Powered by MikPos Integration</p>
-              </div>
-            </div>
-            <Badge variant="outline" className="bg-blue-50 text-blue-700">
-              <Smartphone className="h-4 w-4 mr-1" />
-              MikPos Customer
-            </Badge>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      <div className="max-w-4xl mx-auto pt-8">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center mb-4">
+            <Wifi className="h-8 w-8 text-blue-600 mr-2" />
+            <h1 className="text-3xl font-bold text-gray-900">GARDENS-NET WiFi</h1>
+          </div>
+          <p className="text-gray-600">
+            Selamat datang {customerData?.name || "Customer"}! Pilih paket voucher WiFi Anda
+          </p>
+          <div className="mt-2 text-sm text-gray-500">
+            IP: {customerData?.ip_address} | MAC: {customerData?.mac_address}
           </div>
         </div>
-      </header>
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Error Alert */}
-        {error && (
-          <Alert className="mb-6 border-red-200 bg-red-50">
-            <AlertCircle className="h-4 w-4 text-red-600" />
-            <AlertDescription className="text-red-800">{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {/* Customer Info */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              <span>Informasi Customer</span>
-            </CardTitle>
-            <CardDescription>Data customer dari sistem MikPos</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Nama:</span>
-                <span className="font-medium">{customerData?.name}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Session ID:</span>
-                <span className="font-mono text-xs">{customerData?.session_id}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">MAC Address:</span>
-                <span className="font-mono">{customerData?.mac_address}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">IP Address:</span>
-                <span className="font-mono">{customerData?.ip_address}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Voucher Packages */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {voucherPackages.map((pkg) => (
+            <Card
+              key={pkg.id}
+              className={`cursor-pointer transition-all duration-200 hover:shadow-lg ${
+                selectedPackage === pkg.id ? "ring-2 ring-blue-500 shadow-lg" : "hover:shadow-md"
+              } ${pkg.popular ? "border-blue-500" : ""}`}
+              onClick={() => setSelectedPackage(pkg.id)}
+            >
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg">{pkg.name}</CardTitle>
+                  {pkg.popular && (
+                    <Badge variant="default" className="bg-blue-500">
+                      Populer
+                    </Badge>
+                  )}
+                </div>
+                <CardDescription className="text-2xl font-bold text-blue-600">
+                  Rp {pkg.price.toLocaleString("id-ID")}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center text-sm text-gray-600">
+                  <Clock className="h-4 w-4 mr-2" />
+                  {pkg.duration}
+                </div>
+                <div className="flex items-center text-sm text-gray-600">
+                  <Zap className="h-4 w-4 mr-2" />
+                  {pkg.bandwidth}
+                </div>
+                <div className="flex items-center text-sm text-gray-600">
+                  <Users className="h-4 w-4 mr-2" />
+                  {pkg.concurrent_users} device
+                </div>
+                <p className="text-xs text-gray-500 mt-2">{pkg.description}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
 
         {/* WhatsApp Input */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Nomor WhatsApp</CardTitle>
-            <CardDescription>Kode voucher akan dikirimkan ke nomor ini</CardDescription>
+            <CardTitle className="flex items-center">
+              <Phone className="h-5 w-5 mr-2" />
+              Nomor WhatsApp
+            </CardTitle>
+            <CardDescription>Voucher akan dikirim ke nomor WhatsApp ini setelah pembayaran berhasil</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              <Label htmlFor="whatsapp">
-                Nomor WhatsApp <span className="text-red-500">*</span>
-              </Label>
+              <Label htmlFor="whatsapp">Nomor WhatsApp</Label>
               <Input
                 id="whatsapp"
                 type="tel"
+                placeholder="08123456789"
                 value={whatsappNumber}
                 onChange={(e) => setWhatsappNumber(e.target.value)}
-                placeholder="628123456789 atau 08123456789"
-                className="max-w-md"
+                className="text-lg"
               />
-              <p className="text-sm text-gray-500">Format: 62xxx atau 08xxx</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Voucher Selection */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Pilih Paket Voucher WiFi</CardTitle>
-            <CardDescription>Pilih paket yang sesuai dengan kebutuhan Anda</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {availableProfiles.map((profile) => (
-                <div
-                  key={profile.id}
-                  className={`border rounded-lg p-4 cursor-pointer transition-all ${
-                    selectedProfile === profile.id
-                      ? "border-green-500 bg-green-50"
-                      : "border-gray-200 hover:border-gray-300"
-                  }`}
-                  onClick={() => setSelectedProfile(profile.id)}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <Wifi className="h-5 w-5 text-blue-600" />
-                        <h3 className="font-medium">{profile.name}</h3>
-                      </div>
-                      <p className="text-sm text-gray-600 mb-2">{profile.description}</p>
-                      <div className="flex items-center space-x-4 text-xs text-gray-500">
-                        <span>Durasi: {profile.duration}</span>
-                        <span>Speed: {profile.bandwidth}</span>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-green-600">{formatPrice(profile.price)}</div>
-                      {selectedProfile === profile.id && <Badge className="mt-1">Dipilih</Badge>}
-                    </div>
-                  </div>
-                </div>
-              ))}
+              <p className="text-xs text-gray-500">Format: 08123456789 (tanpa +62 atau spasi)</p>
             </div>
           </CardContent>
         </Card>
 
         {/* Purchase Button */}
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-medium">Total Pembayaran</h3>
-                <p className="text-2xl font-bold text-green-600">
-                  {selectedProfile
-                    ? formatPrice(availableProfiles.find((p) => p.id === selectedProfile)?.price || 0)
-                    : "Rp 0"}
-                </p>
-              </div>
-              <Button
-                onClick={handlePurchase}
-                disabled={!selectedProfile || !whatsappNumber.trim() || isProcessing}
-                className="bg-green-600 hover:bg-green-700"
-                size="lg"
-              >
-                {isProcessing ? (
-                  <>
-                    <Clock className="h-4 w-4 mr-2 animate-spin" />
-                    Memproses...
-                  </>
-                ) : (
-                  <>
-                    <Wifi className="h-4 w-4 mr-2" />
-                    Beli Voucher
-                  </>
+        <div className="text-center">
+          <Button
+            onClick={handlePurchase}
+            disabled={!selectedPackage || !whatsappNumber || processing}
+            size="lg"
+            className="w-full md:w-auto px-8 py-3 text-lg"
+          >
+            {processing ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                Memproses...
+              </>
+            ) : (
+              <>
+                <ShoppingCart className="h-5 w-5 mr-2" />
+                Beli Voucher
+                {selectedPackage && (
+                  <span className="ml-2">
+                    - Rp {voucherPackages.find((p) => p.id === selectedPackage)?.price.toLocaleString("id-ID")}
+                  </span>
                 )}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+              </>
+            )}
+          </Button>
+        </div>
 
-        {/* Integration Info */}
-        <div className="mt-8 text-center">
-          <p className="text-sm text-gray-500">
-            Terintegrasi dengan sistem MikPos untuk kemudahan pembelian voucher WiFi
-          </p>
+        {/* Info */}
+        <div className="mt-8 text-center text-sm text-gray-500">
+          <p>Voucher akan aktif setelah pembayaran berhasil</p>
+          <p>Kode voucher akan dikirim via WhatsApp dalam 1-2 menit</p>
         </div>
       </div>
     </div>

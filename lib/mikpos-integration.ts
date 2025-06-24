@@ -1,3 +1,6 @@
+import { mikrotikAPI } from "./mikrotik-api"
+import { whatsappAPI } from "./whatsapp-api"
+
 interface MikPosConfig {
   baseUrl: string
   apiKey: string
@@ -10,6 +13,42 @@ interface VoucherProfile {
   price: number
   bandwidth: string
   concurrent_users: number
+  uptime_limit: string
+}
+
+const VOUCHER_PROFILES: Record<string, VoucherProfile> = {
+  "1hour": {
+    name: "1 Jam",
+    duration: "1 Jam",
+    price: 5000,
+    bandwidth: "10 Mbps",
+    concurrent_users: 1,
+    uptime_limit: "1h",
+  },
+  "1day": {
+    name: "1 Hari",
+    duration: "24 Jam",
+    price: 15000,
+    bandwidth: "20 Mbps",
+    concurrent_users: 2,
+    uptime_limit: "1d",
+  },
+  "3days": {
+    name: "3 Hari",
+    duration: "72 Jam",
+    price: 35000,
+    bandwidth: "25 Mbps",
+    concurrent_users: 3,
+    uptime_limit: "3d",
+  },
+  "1week": {
+    name: "1 Minggu",
+    duration: "7 Hari",
+    price: 75000,
+    bandwidth: "30 Mbps",
+    concurrent_users: 5,
+    uptime_limit: "1w",
+  },
 }
 
 export class MikPosIntegration {
@@ -21,6 +60,7 @@ export class MikPosIntegration {
 
   // Generate redirect URL for MikPos customers
   async generateRedirectUrl(customerData: {
+    name?: string
     mac_address: string
     ip_address: string
     requested_profile?: string
@@ -28,7 +68,11 @@ export class MikPosIntegration {
     const sessionId = `mikpos_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
     // Store customer session
-    await this.storeCustomerSession(sessionId, customerData)
+    await this.storeCustomerSession(sessionId, {
+      ...customerData,
+      name: customerData.name || "Customer MikPos",
+      created_at: new Date().toISOString(),
+    })
 
     return `${process.env.NEXT_PUBLIC_BASE_URL}/mikpos/redirect?session=${sessionId}`
   }
@@ -42,24 +86,24 @@ export class MikPosIntegration {
     expires_at: string
   }> {
     try {
-      // In production, integrate with MikroTik RouterOS API
       const voucherCode = this.generateVoucherCode(profile)
       const expiresAt = this.calculateExpiryDate(profile)
+      const profileData = VOUCHER_PROFILES[profile]
 
-      // Example MikroTik API call
-      // const response = await fetch(`${this.config.baseUrl}/rest/ip/hotspot/user/add`, {
-      //   method: 'POST',
-      //   headers: {
-      //     'Authorization': `Bearer ${this.config.apiKey}`,
-      //     'Content-Type': 'application/json'
-      //   },
-      //   body: JSON.stringify({
-      //     name: voucherCode,
-      //     password: voucherCode,
-      //     profile: profile,
-      //     'limit-uptime': this.getUptimeLimit(profile)
-      //   })
-      // })
+      if (!profileData) {
+        throw new Error(`Invalid profile: ${profile}`)
+      }
+
+      // Create user in MikroTik
+      await mikrotikAPI.createHotspotUser({
+        name: voucherCode,
+        password: voucherCode,
+        profile: profile,
+        "limit-uptime": profileData.uptime_limit,
+        comment: `Customer: ${customerData.name} | WhatsApp: ${customerData.whatsapp}`,
+      })
+
+      console.log(`Voucher created in MikroTik: ${voucherCode}`)
 
       return {
         code: voucherCode,
@@ -81,42 +125,78 @@ export class MikPosIntegration {
     },
   ): Promise<boolean> {
     try {
-      // In production, integrate with WhatsApp Business API
-      const message = this.formatVoucherMessage(voucher)
-
-      // Example WhatsApp API call
-      // const response = await fetch('https://graph.facebook.com/v17.0/YOUR_PHONE_NUMBER_ID/messages', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
-      //     'Content-Type': 'application/json'
-      //   },
-      //   body: JSON.stringify({
-      //     messaging_product: 'whatsapp',
-      //     to: whatsapp,
-      //     type: 'text',
-      //     text: { body: message }
-      //   })
-      // })
-
-      console.log(`WhatsApp sent to ${whatsapp}: ${message}`)
-      return true
+      return await whatsappAPI.sendVoucherNotification(whatsapp, voucher)
     } catch (error) {
       console.error("Failed to send WhatsApp:", error)
       return false
     }
   }
 
+  // Get voucher status from MikroTik
+  async getVoucherStatus(voucherCode: string): Promise<any> {
+    try {
+      return await mikrotikAPI.getHotspotUser(voucherCode)
+    } catch (error) {
+      console.error("Failed to get voucher status:", error)
+      return null
+    }
+  }
+
+  // Remove expired vouchers
+  async cleanupExpiredVouchers(): Promise<void> {
+    try {
+      // Get all vouchers from storage
+      global.mikposVouchers = global.mikposVouchers || new Map()
+
+      const now = new Date()
+      const expiredVouchers: string[] = []
+
+      for (const [code, voucher] of global.mikposVouchers.entries()) {
+        const expiresAt = new Date(voucher.expires_at)
+        if (now > expiresAt && voucher.status === "active") {
+          expiredVouchers.push(code)
+        }
+      }
+
+      // Remove expired vouchers from MikroTik
+      for (const code of expiredVouchers) {
+        await mikrotikAPI.removeHotspotUser(code)
+
+        // Update status in storage
+        const voucher = global.mikposVouchers.get(code)
+        if (voucher) {
+          voucher.status = "expired"
+          global.mikposVouchers.set(code, voucher)
+        }
+      }
+
+      console.log(`Cleaned up ${expiredVouchers.length} expired vouchers`)
+    } catch (error) {
+      console.error("Failed to cleanup expired vouchers:", error)
+    }
+  }
+
   // Verify webhook signature from MikPos
   verifyWebhookSignature(payload: string, signature: string): boolean {
     // In production, implement proper signature verification
+    // const crypto = require('crypto')
     // const expectedSignature = crypto
     //   .createHmac('sha256', this.config.webhookSecret)
     //   .update(payload)
     //   .digest('hex')
+    // return signature === `sha256=${expectedSignature}`
 
-    // return signature === expectedSignature
     return true // For demo purposes
+  }
+
+  // Get profile information
+  getProfileInfo(profileId: string): VoucherProfile | null {
+    return VOUCHER_PROFILES[profileId] || null
+  }
+
+  // Get all available profiles
+  getAllProfiles(): Record<string, VoucherProfile> {
+    return VOUCHER_PROFILES
   }
 
   private async storeCustomerSession(sessionId: string, customerData: any): Promise<void> {
@@ -126,7 +206,6 @@ export class MikPosIntegration {
     global.mikposCustomers.set(sessionId, {
       ...customerData,
       session_id: sessionId,
-      created_at: new Date().toISOString(),
     })
   }
 
@@ -139,6 +218,13 @@ export class MikPosIntegration {
 
   private calculateExpiryDate(profile: string): string {
     const now = new Date()
+    const profileData = VOUCHER_PROFILES[profile]
+
+    if (!profileData) {
+      // Default to 1 day
+      now.setDate(now.getDate() + 1)
+      return now.toISOString()
+    }
 
     switch (profile) {
       case "1hour":
@@ -158,40 +244,6 @@ export class MikPosIntegration {
     }
 
     return now.toISOString()
-  }
-
-  private getUptimeLimit(profile: string): string {
-    switch (profile) {
-      case "1hour":
-        return "1h"
-      case "1day":
-        return "1d"
-      case "3days":
-        return "3d"
-      case "1week":
-        return "1w"
-      default:
-        return "1d"
-    }
-  }
-
-  private formatVoucherMessage(voucher: {
-    code: string
-    profile: string
-    expires_at: string
-  }): string {
-    return `🎫 *Voucher WiFi GARDENS-NET*
-
-Kode Voucher: *${voucher.code}*
-Paket: ${voucher.profile}
-Berlaku hingga: ${new Date(voucher.expires_at).toLocaleString("id-ID")}
-
-📋 *Cara Penggunaan:*
-1. Hubungkan ke WiFi "GARDENS-NET"
-2. Buka browser, masukkan kode voucher
-3. Klik "Connect" untuk mulai browsing
-
-Terima kasih telah menggunakan layanan kami! 🙏`
   }
 }
 

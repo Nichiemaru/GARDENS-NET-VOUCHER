@@ -16,18 +16,41 @@ interface VoucherMessage {
 
 export class WhatsAppAPI {
   private config: WhatsAppConfig
+  private baseUrl = "https://graph.facebook.com/v18.0"
 
   constructor(config: WhatsAppConfig) {
     this.config = config
   }
 
-  // Send voucher notification with detailed instructions
-  async sendVoucherNotification(whatsapp: string, voucher: VoucherMessage): Promise<boolean> {
+  // Test WhatsApp Business API connection
+  async testConnection(): Promise<boolean> {
     try {
-      const message = this.formatVoucherMessage(voucher)
-      return await this.sendTextMessage(whatsapp, message)
+      if (!this.config.accessToken || !this.config.phoneNumberId) {
+        console.error("❌ Missing WhatsApp API credentials")
+        return false
+      }
+
+      console.log("🔍 Testing WhatsApp Business API connection...")
+
+      const response = await fetch(`${this.baseUrl}/${this.config.phoneNumberId}`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${this.config.accessToken}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error("❌ WhatsApp API connection failed:", errorData)
+        return false
+      }
+
+      const data = await response.json()
+      console.log("✅ WhatsApp API connection successful:", data.display_phone_number)
+      return true
     } catch (error) {
-      console.error("Failed to send voucher notification:", error)
+      console.error("❌ WhatsApp API connection error:", error)
       return false
     }
   }
@@ -35,35 +58,76 @@ export class WhatsAppAPI {
   // Send text message via WhatsApp Business API
   async sendTextMessage(whatsapp: string, message: string): Promise<boolean> {
     try {
-      console.log(`Sending WhatsApp to ${whatsapp}:`, message)
+      if (!this.config.accessToken || !this.config.phoneNumberId) {
+        console.error("❌ Missing WhatsApp API credentials")
+        return false
+      }
 
-      // In production, use actual WhatsApp Business API
-      // const response = await fetch(`https://graph.facebook.com/v18.0/${this.config.phoneNumberId}/messages`, {
-      //   method: 'POST',
-      //   headers: {
-      //     'Authorization': `Bearer ${this.config.accessToken}`,
-      //     'Content-Type': 'application/json'
-      //   },
-      //   body: JSON.stringify({
-      //     messaging_product: 'whatsapp',
-      //     to: whatsapp,
-      //     type: 'text',
-      //     text: { body: message }
-      //   })
-      // })
+      const phoneNumber = this.formatPhoneNumber(whatsapp)
+      console.log(`📱 Sending WhatsApp message to ${phoneNumber}`)
 
-      // Simulate API response
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      const payload = {
+        messaging_product: "whatsapp",
+        to: phoneNumber,
+        type: "text",
+        text: {
+          body: message,
+        },
+      }
 
-      console.log("✅ WhatsApp message sent successfully")
+      const response = await fetch(`${this.baseUrl}/${this.config.phoneNumberId}/messages`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.config.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error("❌ WhatsApp message send failed:", errorData)
+        return false
+      }
+
+      const result = await response.json()
+      console.log("✅ WhatsApp message sent successfully:", result.messages?.[0]?.id)
       return true
     } catch (error) {
-      console.error("❌ Failed to send WhatsApp message:", error)
+      console.error("❌ WhatsApp send error:", error)
       return false
     }
   }
 
-  // Format voucher message with complete instructions
+  // Send voucher notification with complete instructions
+  async sendVoucherNotification(whatsapp: string, voucher: VoucherMessage): Promise<boolean> {
+    try {
+      const message = this.formatVoucherMessage(voucher)
+      return await this.sendTextMessage(whatsapp, message)
+    } catch (error) {
+      console.error("❌ Failed to send voucher notification:", error)
+      return false
+    }
+  }
+
+  // Format phone number for WhatsApp API (international format)
+  private formatPhoneNumber(phoneNumber: string): string {
+    // Remove all non-digit characters
+    let cleaned = phoneNumber.replace(/\D/g, "")
+
+    // Convert Indonesian format to international
+    if (cleaned.startsWith("08")) {
+      cleaned = "628" + cleaned.substring(2)
+    } else if (cleaned.startsWith("8")) {
+      cleaned = "62" + cleaned
+    } else if (!cleaned.startsWith("62")) {
+      cleaned = "62" + cleaned
+    }
+
+    return cleaned
+  }
+
+  // Format comprehensive voucher message
   private formatVoucherMessage(voucher: VoucherMessage): string {
     const expiryDate = new Date(voucher.expires_at).toLocaleDateString("id-ID", {
       weekday: "long",
@@ -119,7 +183,7 @@ _Powered by MikPos Integration_
 _Support: wa.me/628123456789_`
   }
 
-  // Verify webhook signature
+  // Verify webhook signature for security
   verifyWebhookSignature(payload: string, signature: string): boolean {
     try {
       const crypto = require("crypto")
@@ -130,7 +194,7 @@ _Support: wa.me/628123456789_`
 
       return signature === `sha256=${expectedSignature}`
     } catch (error) {
-      console.error("WhatsApp webhook signature verification failed:", error)
+      console.error("❌ WhatsApp webhook signature verification failed:", error)
       return false
     }
   }

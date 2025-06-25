@@ -1,0 +1,156 @@
+name: gardens-net-ecommerce
+services:
+  app:
+    image: ghcr.io/gardens-net/ecommerce:latest
+    deploy:
+      resources:
+        reservations:
+          memory: 256M
+        limits:
+          memory: 1G
+    network_mode: bridge
+    ports:
+      - target: 3000
+        published: "3000"
+        protocol: tcp
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://gardens_user:gardens_secure_2024@postgres:5432/gardens_net
+      REDIS_URL: redis://:redis_secure_2024@redis:6379
+      NEXT_PUBLIC_BASE_URL: http://localhost:3000
+      NEXTAUTH_SECRET: casaos_gardens_net_secret_2024
+      MIKPOS_BASE_URL: http://192.168.1.100:8080
+      MIKPOS_WEBHOOK_SECRET: mikpos_webhook_secret_2024
+      WHATSAPP_ENABLED: "false"
+      MIKROTIK_HOST: 192.168.1.1
+      MIKROTIK_USERNAME: admin
+      MIKROTIK_PASSWORD: ""
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: /DATA/AppData/gardens-net/uploads
+        target: /app/public/uploads
+      - type: bind
+        source: /DATA/AppData/gardens-net/logs
+        target: /app/logs
+      - type: bind
+        source: /DATA/AppData/gardens-net/config
+        target: /app/config
+    depends_on:
+      - postgres
+      - redis
+    container_name: gardens-net-app
+    
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: gardens_net
+      POSTGRES_USER: gardens_user
+      POSTGRES_PASSWORD: gardens_secure_2024
+    volumes:
+      - type: bind
+        source: /DATA/AppData/gardens-net/database
+        target: /var/lib/postgresql/data
+      - type: bind
+        source: /DATA/AppData/gardens-net/init-db.sql
+        target: /docker-entrypoint-initdb.d/init-db.sql
+    restart: unless-stopped
+    container_name: gardens-net-db
+    
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass redis_secure_2024
+    volumes:
+      - type: bind
+        source: /DATA/AppData/gardens-net/redis
+        target: /data
+    restart: unless-stopped
+    container_name: gardens-net-redis
+
+x-casaos:
+  architectures:
+    - amd64
+    - arm64
+  main: app
+  description:
+    en_us: "GARDENS-NET E-commerce - Complete hotspot management system with MikPos integration, WhatsApp Business API, and MikroTik router management. Perfect for internet service providers and WiFi businesses."
+  tagline:
+    en_us: "Professional hotspot management & e-commerce solution"
+  developer: "GARDENS-NET Team"
+  author: "GARDENS-NET"
+  icon: "https://cdn.jsdelivr.net/gh/gardens-net/casaos-store@main/Apps/gardens-net/icon.png"
+  screenshot_link:
+    - "https://cdn.jsdelivr.net/gh/gardens-net/casaos-store@main/Apps/gardens-net/screenshot-1.png"
+    - "https://cdn.jsdelivr.net/gh/gardens-net/casaos-store@main/Apps/gardens-net/screenshot-2.png"
+    - "https://cdn.jsdelivr.net/gh/gardens-net/casaos-store@main/Apps/gardens-net/screenshot-3.png"
+  thumbnail: "https://cdn.jsdelivr.net/gh/gardens-net/casaos-store@main/Apps/gardens-net/thumbnail.png"
+  title:
+    en_us: "GARDENS-NET E-commerce"
+  category: "Network"
+  port_map: "3000"
+  scheme: "http"
+  store_app_id: "gardens-net-ecommerce"
+  tips:
+    before_install:
+      en_us: |
+        🌱 GARDENS-NET E-commerce Installation Tips:
+        
+        📋 Before Installation:
+        • Ensure you have at least 2GB RAM available
+        • Make sure ports 3000, 5432, 6379 are not in use
+        • Have your MikroTik router IP and credentials ready
+        • Prepare WhatsApp Business API credentials (optional)
+        
+        🔧 Default Access:
+        • Web Interface: http://YOUR_CASAOS_IP:3000
+        • Admin Panel: http://YOUR_CASAOS_IP:3000/admin
+        • Default Login: admin@gardens-net.com / admin123
+        
+        ⚠️ Important:
+        • Change default password immediately after installation
+        • Configure MikroTik settings in admin panel
+        • Setup WhatsApp integration for voucher delivery
+        
+        📞 Support: https://github.com/gardens-net/ecommerce/issues
+  envs:
+    - container: NEXT_PUBLIC_BASE_URL
+      description:
+        en_us: "Base URL for the application (e.g., http://192.168.1.100:3000)"
+    - container: MIKPOS_BASE_URL
+      description:
+        en_us: "MikPos server URL (e.g., http://192.168.1.100:8080)"
+    - container: MIKROTIK_HOST
+      description:
+        en_us: "MikroTik router IP address (e.g., 192.168.1.1)"
+    - container: MIKROTIK_USERNAME
+      description:
+        en_us: "MikroTik router username (default: admin)"
+    - container: MIKROTIK_PASSWORD
+      description:
+        en_us: "MikroTik router password"
+    - container: WHATSAPP_ACCESS_TOKEN
+      description:
+        en_us: "WhatsApp Business API access token (optional)"
+    - container: WHATSAPP_PHONE_NUMBER_ID
+      description:
+        en_us: "WhatsApp Business phone number ID (optional)"
+  ports:
+    - container: "3000"
+      description:
+        en_us: "Web interface port"
+  volumes:
+    - container: /app/public/uploads
+      description:
+        en_us: "Upload files storage"
+    - container: /app/logs
+      description:
+        en_us: "Application logs"
+    - container: /app/config
+      description:
+        en_us: "Configuration files"
+    - container: /var/lib/postgresql/data
+      description:
+        en_us: "Database storage"
+    - container: /data
+      description:
+        en_us: "Redis cache storage"

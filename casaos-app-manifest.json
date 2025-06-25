@@ -1,0 +1,124 @@
+{
+  "version": "1.0.0",
+  "title": "GARDENS-NET E-commerce",
+  "name": "gardens-net-ecommerce",
+  "icon": "https://cdn.jsdelivr.net/gh/gardens-net/casaos-store@main/Apps/gardens-net/icon.png",
+  "tagline": "Professional hotspot management & e-commerce solution",
+  "overview": "Complete hotspot management system with MikPos integration, WhatsApp Business API, and MikroTik router management. Perfect for internet service providers and WiFi businesses.",
+  "thumbnail": "https://cdn.jsdelivr.net/gh/gardens-net/casaos-store@main/Apps/gardens-net/thumbnail.png",
+  "screenshots": [
+    "https://cdn.jsdelivr.net/gh/gardens-net/casaos-store@main/Apps/gardens-net/screenshot-1.png",
+    "https://cdn.jsdelivr.net/gh/gardens-net/casaos-store@main/Apps/gardens-net/screenshot-2.png",
+    "https://cdn.jsdelivr.net/gh/gardens-net/casaos-store@main/Apps/gardens-net/screenshot-3.png"
+  ],
+  "category": "Network",
+  "developer": "GARDENS-NET Team",
+  "website": "https://gardens-net.com",
+  "container": {
+    "image": "ghcr.io/gardens-net/ecommerce:latest",
+    "shell": "sh",
+    "privileged": false,
+    "network_mode": "bridge",
+    "web_ui": {
+      "http": "3000",
+      "path": "/"
+    },
+    "health_check": "curl -f http://localhost:3000/api/health || exit 1",
+    "environment": [
+      {
+        "key": "NODE_ENV",
+        "value": "production"
+      },
+      {
+        "key": "NEXT_PUBLIC_BASE_URL",
+        "value": "http://localhost:3000",
+        "description": "Base URL for the application"
+      },
+      {
+        "key": "MIKPOS_BASE_URL",
+        "value": "http://192.168.1.100:8080",
+        "description": "MikPos server URL"
+      },
+      {
+        "key": "MIKROTIK_HOST",
+        "value": "192.168.1.1",
+        "description": "MikroTik router IP address"
+      },
+      {
+        "key": "MIKROTIK_USERNAME",
+        "value": "admin",
+        "description": "MikroTik router username"
+      }
+    ],
+    "ports": [
+      {
+        "container": "3000",
+        "host": "3000",
+        "type": "tcp",
+        "allocation": "preferred",
+        "configurable": "advanced",
+        "description": "Web interface port"
+      }
+    ],
+    "volumes": [
+      {
+        "container": "/app/public/uploads",
+        "host": "/DATA/AppData/gardens-net/uploads",
+        "mode": "rw",
+        "allocation": "automatic",
+        "description": "Upload files storage"
+      },
+      {
+        "container": "/app/logs",
+        "host": "/DATA/AppData/gardens-net/logs",
+        "mode": "rw",
+        "allocation": "automatic",
+        "description": "Application logs"
+      },
+      {
+        "container": "/app/config",
+        "host": "/DATA/AppData/gardens-net/config",
+        "mode": "rw",
+        "allocation": "automatic",
+        "description": "Configuration files"
+      }
+    ],
+    "devices": [],
+    "constraints": {
+      "min_memory": 512,
+      "min_storage": 2048
+    }
+  },
+  "abilities": {
+    "notification": false,
+    "widgets": false,
+    "authentication": false,
+    "search": false,
+    "upnp": false
+  },
+  "tips": {
+    "before_install": [
+      "Ensure you have at least 2GB RAM and 5GB storage available",
+      "Make sure ports 3000, 5432, 6379 are not in use",
+      "Have your MikroTik router credentials ready",
+      "Prepare WhatsApp Business API credentials if needed"
+    ],
+    "after_install": [
+      "Change the default admin password immediately",
+      "Configure MikroTik router settings in admin panel",
+      "Setup WhatsApp integration for voucher delivery",
+      "Test the system with a sample voucher purchase"
+    ]
+  },
+  "changelog": {
+    "1.0.0": [
+      "Initial CasaOS release",
+      "Complete MikPos integration",
+      "WhatsApp Business API support",
+      "MikroTik router management",
+      "Professional admin dashboard"
+    ]
+  },
+  "latest_update": "2024-01-15",
+  "support": "https://github.com/gardens-net/ecommerce/issues"
+}

@@ -10,6 +10,40 @@
 This repository will stay in sync with your deployed chats on [v0.dev](https://v0.dev).
 Any changes you make to your deployed app will be automatically pushed to this repository from [v0.dev](https://v0.dev).
 
+## INSTALL
+curl -fsSL https://raw.githubusercontent.com/Nichiemaru/gardens-net/main/scripts/docker-install.sh | bash
+## Manual install
+mkdir gardens-net && cd gardens-net
+
+# Download docker-compose.yml
+curl -O https://raw.githubusercontent.com/Nichiemaru/gardens-net/main/docker-compose.yml
+
+# Download environment template
+curl -O https://raw.githubusercontent.com/Nichiemaru/gardens-net/main/.env.example
+cp .env.example .env
+
+# Download database initialization
+curl -O https://raw.githubusercontent.com/Nichiemaru/gardens-net/main/init-db.sql
+nano .env  # Edit with your settings
+docker-compose up -d
+# Start all services
+docker-compose up -d
+
+# Stop all services  
+docker-compose down
+
+# Restart services
+docker-compose restart
+
+# Check status
+docker-compose ps
+
+# View logs
+docker-compose logs -f
+docker-compose logs -f app      # App only
+docker-compose logs -f postgres # Database only
+
+
 ## Deployment
 
 Your project is live at:

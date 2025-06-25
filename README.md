@@ -14,8 +14,11 @@ Any changes you make to your deployed app will be automatically pushed to this r
 curl -fsSL https://raw.githubusercontent.com/Nichiemaru/gardens-net/main/scripts/docker-install.sh | bash
 ## Manual install
 mkdir gardens-net && cd gardens-net
+
 wget https://raw.githubusercontent.com/gardens-net/ecommerce/main/scripts/casaos-install.sh
+
 chmod +x casaos-install.sh
+
 ./casaos-install.sh
 
 # Download docker-compose.yml

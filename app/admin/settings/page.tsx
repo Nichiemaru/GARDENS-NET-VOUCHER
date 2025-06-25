@@ -112,9 +112,13 @@ export default function AdminSettingsPage() {
         setWhatsappConfig(data.whatsapp || whatsappConfig)
         setMikrotikConfig(data.mikrotik || mikrotikConfig)
         setMikposConfig(data.mikpos || mikposConfig)
+      } else {
+        console.error("Failed to load configuration:", response.status, response.statusText)
+        alert("Failed to load configuration. Please check the console for details.")
       }
     } catch (error) {
       console.error("Failed to load configuration:", error)
+      alert("Failed to load configuration. Please check the console for details.")
     }
   }
 
@@ -124,9 +128,13 @@ export default function AdminSettingsPage() {
       if (response.ok) {
         const data = await response.json()
         setConfigStatus(data)
+      } else {
+        console.error("Failed to load config status:", response.status, response.statusText)
+        alert("Failed to load config status. Please check the console for details.")
       }
     } catch (error) {
       console.error("Failed to load config status:", error)
+      alert("Failed to load config status. Please check the console for details.")
     }
   }
 
@@ -196,6 +204,9 @@ export default function AdminSettingsPage() {
     const secret = `mikpos-${Date.now()}-${Math.random().toString(36).substr(2, 16)}`
     setMikposConfig((prev) => ({ ...prev, webhook_secret: secret }))
   }
+
+  const whatsappWebhookURL = `${typeof window !== "undefined" ? window.location.origin : "https://your-domain.com"}/api/whatsapp/webhook`
+  const mikposWebhookURL = `${typeof window !== "undefined" ? window.location.origin : "https://your-domain.com"}/api/mikpos/webhook`
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -400,21 +411,13 @@ export default function AdminSettingsPage() {
                 <div>
                   <Label>Webhook URL</Label>
                   <div className="flex items-center mt-1">
-                    <Input
-                      value={`${process.env.NEXT_PUBLIC_BASE_URL || "https://your-domain.com"}/api/whatsapp/webhook`}
-                      readOnly
-                      className="flex-1"
-                    />
+                    <Input value={whatsappWebhookURL} readOnly className="flex-1" />
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
                       className="ml-2"
-                      onClick={() =>
-                        copyToClipboard(
-                          `${process.env.NEXT_PUBLIC_BASE_URL || "https://your-domain.com"}/api/whatsapp/webhook`,
-                        )
-                      }
+                      onClick={() => copyToClipboard(whatsappWebhookURL)}
                     >
                       <Copy className="h-4 w-4" />
                     </Button>
@@ -635,21 +638,13 @@ export default function AdminSettingsPage() {
                   <div>
                     <Label>Webhook URL (untuk MikPos)</Label>
                     <div className="flex items-center mt-1">
-                      <Input
-                        value={`${process.env.NEXT_PUBLIC_BASE_URL || "https://your-domain.com"}/api/mikpos/webhook`}
-                        readOnly
-                        className="flex-1"
-                      />
+                      <Input value={mikposWebhookURL} readOnly className="flex-1" />
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
                         className="ml-2"
-                        onClick={() =>
-                          copyToClipboard(
-                            `${process.env.NEXT_PUBLIC_BASE_URL || "https://your-domain.com"}/api/mikpos/webhook`,
-                          )
-                        }
+                        onClick={() => copyToClipboard(mikposWebhookURL)}
                       >
                         <Copy className="h-4 w-4" />
                       </Button>

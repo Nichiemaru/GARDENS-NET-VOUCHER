@@ -1,8 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { writeFileSync, readFileSync, existsSync } from "fs"
-import { join } from "path"
 
-const CONFIG_FILE = join(process.cwd(), ".env.local")
+// Path to .env.local (resolved only when we have the Path module)
+let CONFIG_FILE = ".env.local"
 
 // Get current configuration
 export async function GET() {
@@ -41,6 +40,10 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const { type, config } = await request.json()
+
+    const { writeFileSync, readFileSync, existsSync } = await import("node:fs")
+    const { join } = await import("node:path")
+    CONFIG_FILE = join(process.cwd(), ".env.local")
 
     // Read current .env.local file
     let envContent = ""

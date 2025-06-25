@@ -954,13 +954,37 @@ _Support: wa.me/628123456789_`
                     </DialogContent>
                   </Dialog>
 
-                  <Button className="w-full justify-start" variant="outline">
+                  <Button
+                    className="w-full justify-start"
+                    variant="outline"
+                    onClick={() => router.push("/mikpos/users")}
+                  >
                     <Users className="h-4 w-4 mr-2" />
                     Manage Users
                   </Button>
-                  <Button className="w-full justify-start" variant="outline">
+                  <Button
+                    className="w-full justify-start"
+                    variant="outline"
+                    onClick={() => router.push("/mikpos/settings")}
+                  >
                     <Settings className="h-4 w-4 mr-2" />
                     System Settings
+                  </Button>
+                  <Button
+                    className="w-full justify-start"
+                    variant="outline"
+                    onClick={() => router.push("/admin/routers")}
+                  >
+                    <Router className="h-4 w-4 mr-2" />
+                    Router Management
+                  </Button>
+                  <Button
+                    className="w-full justify-start"
+                    variant="outline"
+                    onClick={() => router.push("/mikpos/settings/whatsapp")}
+                  >
+                    <MessageCircle className="h-4 w-4 mr-2" />
+                    WhatsApp Settings
                   </Button>
                   <Button
                     className="w-full justify-start"
